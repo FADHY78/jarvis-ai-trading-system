@@ -147,6 +147,20 @@ void CheckAndExecuteSignals()
    Print("   Position Open: ", positionOpen ? "YES" : "NO");
    Print("   Confidence Check: ", confidence, " >= 85? ", (confidence >= 85 ? "YES" : "NO"));
    
+   // Check if signal matches current chart symbol
+   string currentSymbol = Symbol();
+   if(StringFind(pair, "XAU") == -1 && StringFind(currentSymbol, "XAU") != -1)
+   {
+      Print("⏸️ Skipping: Signal is for ", pair, " but chart is ", currentSymbol);
+      return;
+   }
+   if(StringFind(pair, "XAU") != -1 && StringFind(currentSymbol, "XAU") == -1)
+   {
+      Print("⏸️ Skipping: Signal is for ", pair, " but chart is ", currentSymbol);
+      return;
+   }
+   Print("✅ Symbol Match: Signal for ", pair, " matches chart ", currentSymbol);
+   
    // Check if signal changed direction
    bool signalChanged = (direction != currentSignalDirection) && (currentSignalDirection != "");
    
