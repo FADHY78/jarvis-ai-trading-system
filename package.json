@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "backend": "node server.js",
     "frontend": "vite",
-    "start": "node start-all.js"
+    "start": "node start-all.js",
+    "vercel-build": "vite build"
   },
   "dependencies": {
     "@google/genai": "^1.39.0",
