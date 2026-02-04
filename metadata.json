@@ -1,0 +1,7 @@
+{
+  "name": "JARVIS AI Trading System",
+  "description": "A futuristic, Tony Stark-inspired AI trading assistant featuring real-time market analysis, TradingView integration, and advanced volatility intelligence.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

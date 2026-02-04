@@ -1,0 +1,219 @@
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│   ✅ JARVIS V12.0 - FIRST TIME STARTUP CHECKLIST          │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+
+Follow these steps in order for a smooth first launch:
+
+═══════════════════════════════════════════════════════════════
+
+📋 PRE-FLIGHT CHECKLIST
+
+□ Step 1: Install Node.js
+   ✓ You have: v24.12.0 (READY ✅)
+   
+□ Step 2: Install Dependencies
+   Command: npm install
+   Status: Check if node_modules folder exists
+   
+□ Step 3: Configure Telegram Bot
+   • Open Telegram
+   • Message @BotFather
+   • Send: /newbot
+   • Follow instructions
+   • Copy token to .env.local
+   
+   • Message @userinfobot
+   • Send: /start
+   • Copy chat ID to .env.local
+   
+□ Step 4: Configure Deriv (Optional)
+   • Visit: app.deriv.com/account/api-token
+   • Create token with all scopes
+   • Copy 15-character token
+   • Add to .env.local
+   • OR leave empty for demo mode
+   
+□ Step 5: Install VPN (If Telegram Blocked)
+   Recommended:
+   • ProtonVPN (free)
+   • Windscribe (10GB free)
+   • TunnelBear (500MB free)
+   
+□ Step 6: Run Health Check
+   Command: node health-check.js
+   Look for: "SYSTEM CHECK PASSED ✅"
+   
+═══════════════════════════════════════════════════════════════
+
+🚀 LAUNCH SEQUENCE
+
+□ Method 1: Double-Click Start
+   • Open file explorer
+   • Navigate to jarvis-ai-trading-system folder
+   • Double-click: start-jarvis.bat
+   • Wait for browser to open
+   
+□ Method 2: Command Line
+   • Open terminal in project folder
+   • Run: npm start
+   • Wait for "ready" messages
+   
+═══════════════════════════════════════════════════════════════
+
+✓ VERIFICATION CHECKLIST
+
+□ Frontend Loads
+   • Browser opens automatically
+   • URL: http://localhost:5173
+   • Dashboard displays
+   • No console errors
+   
+□ Backend Running
+   • Console shows: "Backend Server Running"
+   • URL: http://localhost:3001
+   • No connection errors
+   
+□ Deriv Connected
+   • Console shows: "Deriv Uplink Established"
+   • Green indicator in UI
+   • Market data flowing
+   
+□ Telegram Working
+   • Go to Settings page
+   • Click "TEST TELEGRAM BOT"
+   • Check phone for test message
+   • If failed: Enable VPN and retry
+   
+═══════════════════════════════════════════════════════════════
+
+🎯 FIRST SIGNAL TEST
+
+□ Generate Test Signal
+   • Go to "AI Signals" page
+   • Wait for signal generation
+   • Check confidence level (70%+)
+   • Verify ICT concepts shown
+   
+□ Check Telegram Alert
+   • Signal should arrive on phone
+   • Format should be professional
+   • Buttons should be visible
+   • Click buttons to test
+   
+═══════════════════════════════════════════════════════════════
+
+⚠️ TROUBLESHOOTING
+
+If Telegram doesn't work:
+1. Check VPN is connected
+2. Restart backend: Ctrl+C, then npm run backend
+3. Verify .env.local has correct token/chat ID
+4. Click START button in Telegram bot chat
+
+If Deriv doesn't connect:
+1. Check internet connection
+2. Verify token is exactly 15 characters
+3. Check token hasn't expired
+4. Try demo mode (empty token)
+
+If Port already in use:
+1. Close other instances
+2. Or use: netstat -ano | findstr :3001
+3. Then: taskkill /PID <PID> /F
+
+If npm install fails:
+1. Delete node_modules folder
+2. Delete package-lock.json
+3. Run: npm install again
+
+═══════════════════════════════════════════════════════════════
+
+📱 ONGOING USAGE
+
+Daily Routine:
+1. Start JARVIS (double-click start-jarvis.bat)
+2. Check Settings for connection status
+3. Monitor AI Signals page for opportunities
+4. Receive alerts on Telegram
+5. Use interactive buttons for quick actions
+
+═══════════════════════════════════════════════════════════════
+
+🎓 LEARNING PATH
+
+Week 1:
+• Learn the interface
+• Understand signal format
+• Study ICT concepts
+• Practice with demo account
+
+Week 2:
+• Analyze past signals
+• Compare with actual price movement
+• Refine entry timing
+• Test different pairs
+
+Week 3:
+• Start small live trades
+• Follow risk management rules
+• Keep trading journal
+• Review performance
+
+═══════════════════════════════════════════════════════════════
+
+📚 DOCUMENTATION TO READ
+
+Priority 1 (Start Here):
+1. README.md - System overview
+2. QUICK_REFERENCE.txt - Commands & tips
+3. This file - Startup checklist
+
+Priority 2 (Before Trading):
+4. TELEGRAM_BOT_GUIDE.md - Bot features
+5. ACCURACY_ENHANCEMENTS_V12.md - ICT concepts
+
+Priority 3 (Advanced):
+6. STARTUP_GUIDE.md - Auto-startup
+7. CHANGELOG_V12.md - Latest updates
+
+═══════════════════════════════════════════════════════════════
+
+💡 IMPORTANT REMINDERS
+
+✓ Always use stop losses
+✓ Never risk more than 2% per trade
+✓ Test strategies in demo mode first
+✓ Don't chase losses
+✓ Follow your trading plan
+✓ Keep emotions in check
+✓ Journal all trades
+✓ Continuous learning
+
+═══════════════════════════════════════════════════════════════
+
+🎉 CONGRATULATIONS!
+
+You now have a professional AI trading system with:
+• ICT concepts integration
+• Real-time Deriv API
+• Professional Telegram bot
+• Interactive notifications
+• Auto-startup capability
+• Complete documentation
+
+═══════════════════════════════════════════════════════════════
+
+Ready to start? Run this command:
+
+    npm start
+
+Or double-click: start-jarvis.bat
+
+═══════════════════════════════════════════════════════════════
+
+JARVIS AI V12.0 + ICT
+Made with ❤️ for profitable trading
+
+Good luck and trade safe! 🚀📈
