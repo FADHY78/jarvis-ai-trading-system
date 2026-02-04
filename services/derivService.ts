@@ -223,9 +223,13 @@ class DerivService {
   private authorize() {
     if (isValidToken) {
       console.log('🔐 JARVIS: Attempting authorization...');
+      console.log('   Token length:', TOKEN.length, 'characters');
+      console.log('   Token preview:', TOKEN.substring(0, 5) + '...' + TOKEN.substring(TOKEN.length - 3));
       this.send({ authorize: TOKEN });
     } else {
       console.log('ℹ️ JARVIS: No valid token - using demo mode');
+      console.log('   TOKEN value:', TOKEN);
+      console.log('   TOKEN length:', TOKEN.length);
       this.isAuthorized = false;
     }
   }

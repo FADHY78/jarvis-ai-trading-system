@@ -201,50 +201,144 @@ void CheckAndExecuteSignals()
 //+------------------------------------------------------------------+
 void OpenTrade(string pair, string direction, double entry, double tp1, double tp2, double tp3, double sl)
 {
+   // Check if trading is allowed
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
+   {
+      Print("❌ Trading is disabled in MT5 terminal!");
+      Print("💡 Enable AutoTrading: Press Ctrl+E or click AutoTrading button");
+      return;
+   }
+   
+   if(!MQLInfoInteger(MQL_TRADE_ALLOWED))
+   {
+      Print("❌ EA trading is disabled!");
+      Print("💡 Check: Tools → Options → Expert Advisors → Allow Algo Trading");
+      return;
+   }
+   
+   if(!AccountInfoInteger(ACCOUNT_TRADE_EXPERT))
+   {
+      Print("❌ Expert Advisors are disabled for this account!");
+      return;
+   }
+   
    MqlTradeRequest request;
    MqlTradeResult result;
    ZeroMemory(request);
    ZeroMemory(result);
    
+   // Get current market prices
+   double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
+   double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+   
+   Print("💰 Current Market: ASK=", ask, " BID=", bid);
+   Print("🎯 Order Details: ", direction, " ", LotSize, " lots");
+   
    // Prepare trade request
    request.action = TRADE_ACTION_DEAL;
-   request.symbol = Symbol(); // Current chart symbol
+   request.symbol = Symbol();
    request.volume = LotSize;
    request.type = (direction == "LONG") ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
-   request.price = (direction == "LONG") ? SymbolInfoDouble(Symbol(), SYMBOL_ASK) : SymbolInfoDouble(Symbol(), SYMBOL_BID);
+   request.price = (direction == "LONG") ? ask : bid;
    request.sl = sl;
    request.tp = tp3; // Set main TP to TP3
-   request.deviation = 10;
+   request.deviation = 50;
    request.magic = MagicNumber;
    request.comment = "JARVIS AI " + direction;
+   request.type_filling = ORDER_FILLING_IOC;
+   
+   Print("📤 Sending order to broker...");
+   Print("   Symbol: ", request.symbol);
+   Print("   Type: ", (request.type == ORDER_TYPE_BUY ? "BUY" : "SELL"));
+   Print("   Volume: ", request.volume);
+   Print("   Price: ", request.price);
+   Print("   SL: ", request.sl);
+   Print("   TP: ", request.tp);
+   Print("   Filling Type: ORDER_FILLING_IOC");
    
    // Send order
-   if(OrderSend(request, result))
+   if(!OrderSend(request, result))
    {
-      if(result.retcode == TRADE_RETCODE_DONE)
+      int errorCode = GetLastError();
+      Print("❌ OrderSend Failed!");
+      Print("   Error Code: ", errorCode);
+      Print("   Result Code: ", result.retcode);
+      Print("   Result Comment: ", result.comment);
+      
+      if(errorCode == 4756)
       {
-         Print("✅ Trade Opened: ", direction, " ", pair, " @ ", result.price);
-         Print("   🎯 TP1: ", tp1, " | TP2: ", tp2, " | TP3: ", tp3);
-         Print("   🛡️ SL: ", sl, " | Confidence: ", currentConfidence, "%");
+         Print("   Error 4756: Failed trade request");
+         Print("💡 SOLUTIONS:");
+         Print("   1. Check AutoTrading is enabled (Ctrl+E)");
+         Print("   2. Check account balance/margin");
+         Print("   3. Verify market is open");
+         Print("   4. Try smaller lot size");
+         Print("   5. Broker may not support ORDER_FILLING_IOC");
+         Print("   Current Balance: $", AccountInfoDouble(ACCOUNT_BALANCE));
+         Print("   Free Margin: $", AccountInfoDouble(ACCOUNT_MARGIN_FREE));
+         Print("   Account Leverage: 1:", AccountInfoInteger(ACCOUNT_LEVERAGE));
          
-         positionOpen = true;
-         positionTicket = (int)result.order;
-         
-         // Send Telegram notification
-         SendTelegramNotification("🟢 TRADE OPENED\\n" + 
-                                 "Pair: " + pair + "\\n" +
-                                 "Direction: " + direction + "\\n" +
-                                 "Entry: " + DoubleToString(result.price, 5) + "\\n" +
-                                 "Confidence: " + IntegerToString(currentConfidence) + "%");
+         // Try with different filling type
+         Print("🔄 Retrying with ORDER_FILLING_FOK...");
+         request.type_filling = ORDER_FILLING_FOK;
+         if(!OrderSend(request, result))
+         {
+            Print("❌ Still failed with FOK. Trying RETURN...");
+            request.type_filling = ORDER_FILLING_RETURN;
+            OrderSend(request, result);
+         }
       }
-      else
+      else if(errorCode == 4753)
       {
-         Print("❌ Order failed: ", result.retcode, " - ", result.comment);
+         Print("   Error 4753: Trade context busy");
+         Print("💡 Wait a moment and try again");
       }
+      else if(errorCode == 10004)
+      {
+         Print("   Error 10004: Requote - price changed");
+         Print("💡 This is normal, EA will retry on next signal");
+      }
+      
+      return;
+   }
+   
+   if(result.retcode == TRADE_RETCODE_DONE)
+   {
+      Print("✅ Trade Opened Successfully!");
+      Print("   Direction: ", direction);
+      Print("   Pair: ", pair);
+      Print("   Entry: ", result.price);
+      Print("   Volume: ", result.volume);
+      Print("   🎯 TP1: ", tp1, " | TP2: ", tp2, " | TP3: ", tp3);
+      Print("   🛡️ SL: ", sl);
+      Print("   Confidence: ", currentConfidence, "%");
+      
+      positionOpen = true;
+      positionTicket = (int)result.order;
+      
+      // Send Telegram notification
+      SendTelegramNotification("🟢 TRADE OPENED\\n" + 
+                              "Pair: " + pair + "\\n" +
+                              "Direction: " + direction + "\\n" +
+                              "Entry: " + DoubleToString(result.price, 5) + "\\n" +
+                              "Confidence: " + IntegerToString(currentConfidence) + "%");
    }
    else
    {
-      Print("❌ OrderSend error: ", GetLastError());
+      Print("❌ Order Rejected by Broker!");
+      Print("   Return Code: ", result.retcode);
+      Print("   Comment: ", result.comment);
+      
+      if(result.retcode == 10006)
+         Print("💡 Requote - price moved, will retry on next signal");
+      else if(result.retcode == 10013)
+         Print("💡 Invalid request - check order parameters");
+      else if(result.retcode == 10014)
+         Print("💡 Invalid volume - check lot size settings");
+      else if(result.retcode == 10016)
+         Print("💡 Market is closed");
+      else if(result.retcode == 10019)
+         Print("💡 Insufficient funds - reduce lot size");
    }
 }
 
