@@ -18,7 +18,20 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // Store latest signals for MT5 EA
-let latestSignals = [];
+let latestSignals = [
+  // Demo signal for testing MT5 EA - will be replaced by real signals
+  {
+    pair: 'XAU/USD',
+    type: 'LONG',
+    confidence: 92,
+    entry: 2650.50,
+    sl: 2645.00,
+    tp1: 2658.75,
+    tp2: 2663.25,
+    tp3: 2672.50,
+    timestamp: new Date().toISOString()
+  }
+];
 
 console.log('🤖 JARVIS Telegram Backend Server');
 console.log('================================');

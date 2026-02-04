@@ -4,7 +4,7 @@
 //|                                            Auto Trading Bot      |
 //+------------------------------------------------------------------+
 #property copyright "JARVIS AI Trading System V12.0"
-#property link      "http://localhost:3000"
+#property link      "https://jarvis-ai-trading-system.vercel.app"
 #property version   "12.00"
 #property strict
 
@@ -12,7 +12,7 @@
 input double LotSize = 0.01;              // Lot size per trade
 input double RiskPercent = 2.0;           // Risk per trade (%)
 input int MagicNumber = 123456;           // Magic number for EA trades
-input string API_URL = "http://localhost:3001/api/signals"; // JARVIS API endpoint
+input string API_URL = "https://jarvis-ai-trading-system.vercel.app/api/signals"; // JARVIS API endpoint
 input int SignalCheckInterval = 3000;     // Check signals every 3 seconds
 input bool EnableAutoTrading = true;      // Enable auto trading
 input bool CloseOnSignalChange = true;    // Close position when signal changes
@@ -43,7 +43,7 @@ int OnInit()
    Print("🎯 Auto Trading: ", EnableAutoTrading ? "ENABLED" : "DISABLED");
    
    // Enable WebRequest for localhost
-   Print("⚙️ Make sure to add 'http://localhost:3001' to MT5 allowed URLs");
+   Print("⚙️ Make sure to add 'https://jarvis-ai-trading-system.vercel.app' to MT5 allowed URLs");
    Print("   Tools → Options → Expert Advisors → Allow WebRequest for listed URL");
    
    EventSetTimer(3); // Check every 3 seconds
@@ -90,22 +90,44 @@ void CheckAndExecuteSignals()
    string resultString;
    int timeout = 5000;
    
+   Print("🔍 Checking for signals from JARVIS API...");
+   
    // Call JARVIS API
    int res = WebRequest("GET", API_URL, headers, timeout, post, result, headers);
    
    if(res == -1)
    {
-      Print("⚠️ Error connecting to JARVIS API: ", GetLastError());
-      Print("💡 Add http://localhost:3001 to Tools → Options → Expert Advisors → WebRequest URLs");
+      int errorCode = GetLastError();
+      Print("⚠️ WebRequest Error Code: ", errorCode);
+      
+      if(errorCode == 4060)
+      {
+         Print("❌ URL NOT ALLOWED IN MT5!");
+         Print("💡 SOLUTION:");
+         Print("   1. Open MT5 → Tools → Options → Expert Advisors");
+         Print("   2. Check 'Allow WebRequest for listed URL'");
+         Print("   3. Add: https://jarvis-ai-trading-system.vercel.app");
+         Print("   4. Click OK and restart MT5");
+      }
+      else if(errorCode == 4014)
+      {
+         Print("❌ System function not allowed! Enable 'Allow WebRequest' in settings");
+      }
+      else
+      {
+         Print("❌ Error connecting to JARVIS API: ", errorCode);
+      }
       return;
    }
    
    resultString = CharArrayToString(result);
+   Print("📡 API Response (", res, " bytes): ", StringSubstr(resultString, 0, 200));
    
    // Parse JSON response
    if(StringFind(resultString, "\"success\":true") == -1)
    {
-      Print("⚠️ No valid signal received");
+      Print("⚠️ No valid signal received from API");
+      Print("   Response: ", resultString);
       return;
    }
    
@@ -120,6 +142,10 @@ void CheckAndExecuteSignals()
    double sl = StringToDouble(ExtractValue(resultString, "\"sl\":", ","));
    
    Print("📊 Signal Received: ", pair, " ", direction, " ", confidence, "%");
+   Print("   Entry: ", entry, " | SL: ", sl);
+   Print("   TP1: ", tp1, " | TP2: ", tp2, " | TP3: ", tp3);
+   Print("   Position Open: ", positionOpen ? "YES" : "NO");
+   Print("   Confidence Check: ", confidence, " >= 85? ", (confidence >= 85 ? "YES" : "NO"));
    
    // Check if signal changed direction
    bool signalChanged = (direction != currentSignalDirection) && (currentSignalDirection != "");
@@ -133,7 +159,16 @@ void CheckAndExecuteSignals()
    // Open new trade if confidence >= 85%
    if(confidence >= 85 && !positionOpen)
    {
+      Print("✅ Conditions met! Opening trade...");
       OpenTrade(pair, direction, entry, tp1, tp2, tp3, sl);
+   }
+   else if(confidence < 85)
+   {
+      Print("⏸️ Skipping: Confidence too low (", confidence, "% < 85%)");
+   }
+   else if(positionOpen)
+   {
+      Print("⏸️ Skipping: Position already open");
    }
    
    // Update current signal
@@ -320,7 +355,7 @@ void ClosePosition(string reason)
 //+------------------------------------------------------------------+
 void SendTelegramNotification(string message)
 {
-   string url = "http://localhost:3001/api/telegram/sendAlert";
+   string url = "https://jarvis-ai-trading-system.vercel.app/api/telegram/sendAlert";
    string headers = "Content-Type: application/json\r\n";
    char post[], result[];
    string postData = "{\"title\":\"MT5 EA Alert\",\"message\":\"" + message + "\"}";
