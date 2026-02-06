@@ -265,9 +265,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
           width: { ideal: 4096, min: 1920 },
           height: { ideal: 2160, min: 1080 },
           frameRate: { ideal: 60, min: 30 },
-          aspectRatio: { ideal: 16/9 },
-          focusMode: 'continuous',
-          resizeMode: 'crop-and-scale'
+          aspectRatio: { ideal: 16/9 }
         },
         audio: false // Disable audio for better performance
       });
@@ -480,8 +478,8 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
     
     // Technical indicators weight
     if (technicals.macd.histogram > 0) bullishSignals += 2; else bearishSignals += 2;
-    if (parseFloat(technicals.rsi.toFixed(1)) < 30) bullishSignals += 2;
-    if (parseFloat(technicals.rsi.toFixed(1)) > 70) bearishSignals += 2;
+    if (technicals.rsi < 30) bullishSignals += 2;
+    if (technicals.rsi > 70) bearishSignals += 2;
     if (technicals.stochastic.signal === 'OVERSOLD') bullishSignals += 1;
     if (technicals.stochastic.signal === 'OVERBOUGHT') bearishSignals += 1;
     if (technicals.ichimoku.signal === 'BULLISH') bullishSignals += 2; else if (technicals.ichimoku.signal === 'BEARISH') bearishSignals += 2;
@@ -531,10 +529,10 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
     let entryReason = 'Conflicting signals detected';
     
     if (strength >= 4 && confidence > 70) {
-      if (finalBullish && technicals.rsi.value < 70 && smc.premiumDiscount !== 'PREMIUM') {
+      if (finalBullish && technicals.rsi < 70 && smc.premiumDiscount !== 'PREMIUM') {
         entrySignal = 'LONG ENTRY';
         entryReason = `Strong bullish confluence: MACD ${technicals.macd.histogram > 0 ? 'bullish' : 'bearish'}, RSI ${technicals.rsi.toFixed(0)}, ${smc.marketStructure}`;
-      } else if (!finalBullish && technicals.rsi.value > 30 && smc.premiumDiscount !== 'DISCOUNT') {
+      } else if (!finalBullish && technicals.rsi > 30 && smc.premiumDiscount !== 'DISCOUNT') {
         entrySignal = 'SHORT ENTRY';
         entryReason = `Strong bearish confluence: MACD ${technicals.macd.histogram > 0 ? 'bullish' : 'bearish'}, RSI ${technicals.rsi.toFixed(0)}, ${smc.marketStructure}`;
       }
