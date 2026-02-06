@@ -1,6 +1,6 @@
 
-import React, { useState, useRef, useCallback } from 'react';
-import { Upload, Image as ImageIcon, Search, Crosshair, AlertCircle, Cpu, Brain, Sparkles, RefreshCw, TrendingUp, TrendingDown, Activity, Zap, Eye, Clock, DollarSign, BarChart2 } from 'lucide-react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { Upload, Image as ImageIcon, Search, Crosshair, AlertCircle, Cpu, Brain, Sparkles, RefreshCw, TrendingUp, TrendingDown, Activity, Zap, Eye, Clock, DollarSign, BarChart2, Camera, CameraOff, Square } from 'lucide-react';
 import { speakJarvis } from '../services/voiceService';
 import { PriceData } from '../types';
 import { detectPatterns, detectSMC, detectAdvancedSpikes, calculateAdvancedTechnicals } from '../services/mockDataService';
@@ -220,7 +220,20 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
   const [imageDetection, setImageDetection] = useState<ImageDetection | null>(null);
   const [showSymbolSelector, setShowSymbolSelector] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [isCameraMode, setIsCameraMode] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Cleanup camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [cameraStream]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -239,6 +252,66 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
         speakJarvis("Chart uploaded. Please confirm the symbol before analysis.", 'sophisticated');
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'environment', // Use back camera on mobile
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        } 
+      });
+      setCameraStream(stream);
+      setIsCameraMode(true);
+      setSelectedImage(null);
+      setResults(null);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      
+      speakJarvis("Camera activated. Frame your trading chart and capture.", 'sophisticated');
+    } catch (error) {
+      console.error('Camera access error:', error);
+      speakJarvis("Camera access denied. Please check permissions.", 'sophisticated');
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setIsCameraMode(false);
+  };
+
+  const captureFromCamera = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0);
+        const imgSrc = canvas.toDataURL('image/png');
+        
+        setSelectedImage(imgSrc);
+        setResults(null);
+        setShowSymbolSelector(true);
+        stopCamera();
+        
+        // Smart default: Use XAUUSD if available, or first available symbol
+        const defaultSymbol = prices['XAUUSD'] ? 'XAUUSD' : Object.keys(prices).filter(s => !s.startsWith('frx') && !s.startsWith('cry') && !s.startsWith('1HZ'))[0];
+        setSelectedSymbol(defaultSymbol);
+        
+        speakJarvis("Chart captured. Please confirm the symbol before analysis.", 'sophisticated');
+      }
     }
   };
 
@@ -613,7 +686,27 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
         <div className="space-y-4">
           <div className={`glass rounded-3xl overflow-hidden border-2 transition-all duration-500 ${selectedImage ? 'border-cyan-500/50' : 'border-dashed border-white/10'}`}>
             <div className="aspect-video relative bg-black/40 flex items-center justify-center overflow-hidden">
-              {selectedImage ? (
+              {isCameraMode ? (
+                <>
+                  <video 
+                    ref={videoRef} 
+                    autoPlay 
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 pointer-events-none">
+                    {/* Camera viewfinder overlay */}
+                    <div className="absolute inset-4 border-2 border-dashed border-cyan-500/40 rounded-lg"></div>
+                    <div className="absolute top-3 left-3 bg-red-500/80 px-3 py-1 rounded flex items-center gap-2">
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                      <span className="text-[9px] font-mono text-white font-bold">LIVE</span>
+                    </div>
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/80 px-4 py-2 rounded-lg border border-cyan-500/30">
+                      <p className="text-[9px] font-mono text-cyan-400 text-center">Frame your chart within the guide</p>
+                    </div>
+                  </div>
+                </>
+              ) : selectedImage ? (
                 <>
                   <img src={selectedImage} alt="Market Chart" className="w-full h-full object-contain" />
                   
@@ -678,16 +771,44 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
               )}
             </div>
             
-            <div className="p-3 bg-black/20 flex gap-3">
+            <div className="p-3 bg-black/20 flex gap-2">
               <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
-              <button onClick={triggerUpload} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold tracking-widest">
-                <Upload size={14} /> Upload Chart
-              </button>
-              <button onClick={() => setShowSymbolSelector(true)} disabled={!selectedImage || isAnalyzing}
-                className="flex items-center justify-center gap-2 px-5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold disabled:opacity-30"
-              >
-                <RefreshCw size={14} className={isAnalyzing ? 'animate-spin' : ''} /> Re-Analyze
-              </button>
+              <canvas ref={canvasRef} className="hidden" />
+              
+              {isCameraMode ? (
+                <>
+                  <button 
+                    onClick={captureFromCamera} 
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-cyan-500 hover:bg-cyan-600 border border-cyan-400 text-white rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold tracking-widest neon-glow"
+                  >
+                    <Square size={14} /> Capture Chart
+                  </button>
+                  <button 
+                    onClick={stopCamera} 
+                    className="flex items-center justify-center gap-2 px-5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold"
+                  >
+                    <CameraOff size={14} /> Stop
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={triggerUpload} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold tracking-widest">
+                    <Upload size={14} /> Upload
+                  </button>
+                  <button 
+                    onClick={startCamera} 
+                    disabled={isAnalyzing}
+                    className="flex items-center justify-center gap-2 px-4 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold disabled:opacity-30"
+                  >
+                    <Camera size={14} /> Camera
+                  </button>
+                  <button onClick={() => setShowSymbolSelector(true)} disabled={!selectedImage || isAnalyzing}
+                    className="flex items-center justify-center gap-2 px-4 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold disabled:opacity-30"
+                  >
+                    <RefreshCw size={14} className={isAnalyzing ? 'animate-spin' : ''} /> Re-Analyze
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
