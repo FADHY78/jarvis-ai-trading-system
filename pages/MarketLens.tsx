@@ -713,7 +713,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
         {/* Left Column: Upload and Preview */}
         <div className="space-y-4">
           <div className={`${isCameraMode ? 'fixed inset-0 z-50 bg-black' : 'glass rounded-3xl overflow-hidden border-2 transition-all duration-500'} ${selectedImage && !isCameraMode ? 'border-cyan-500/50' : 'border-dashed border-white/10'}`}>
-            <div className="aspect-video relative bg-black flex items-center justify-center overflow-hidden rounded-3xl">
+            <div className={`${isCameraMode ? 'fixed inset-0 z-50 bg-black flex items-center justify-center' : 'aspect-video relative bg-black flex items-center justify-center overflow-hidden rounded-3xl'}`}>
               {isCameraMode ? (
                 <>
                   <video 
@@ -721,16 +721,16 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
                     autoPlay 
                     playsInline
                     muted
-                    className="w-full h-full object-cover rounded-3xl"
+                    className="w-full h-screen object-cover"
                   />
                   <canvas ref={canvasRef} className="hidden" />
                   
                   {/* Minimal Camera UI */}
                   <div className="absolute inset-0 pointer-events-none">
                     {/* Live indicator only */}
-                    <div className="absolute top-4 right-4 bg-red-500 px-2 py-1 rounded-full flex items-center gap-1 shadow-lg">
-                      <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
-                      <span className="text-[8px] font-mono text-white font-bold">REC</span>
+                    <div className="absolute top-8 right-8 bg-red-500 px-3 py-2 rounded-full flex items-center gap-2 shadow-lg z-10">
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                      <span className="text-[10px] font-mono text-white font-bold">REC</span>
                     </div>
                   </div>
                 </>
@@ -799,7 +799,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
               )}
             </div>
             
-            <div className="p-3 bg-black/20 flex gap-2">
+            <div className={`${isCameraMode ? 'fixed bottom-8 left-8 right-8 z-50' : 'p-3 bg-black/20'} flex gap-2`}>
               <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
               
               {isCameraMode ? (
