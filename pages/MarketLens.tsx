@@ -258,14 +258,18 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
 
   const startCamera = async () => {
     try {
-      // Request camera access with high quality settings
+      // Request camera access with maximum quality settings
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
           facingMode: 'environment', // Prefer back camera on mobile
-          width: { ideal: 1920, max: 1920 },
-          height: { ideal: 1080, max: 1080 },
-          frameRate: { ideal: 30 }
-        } 
+          width: { ideal: 4096, min: 1920 },
+          height: { ideal: 2160, min: 1080 },
+          frameRate: { ideal: 60, min: 30 },
+          aspectRatio: { ideal: 16/9 },
+          focusMode: 'continuous',
+          resizeMode: 'crop-and-scale'
+        },
+        audio: false // Disable audio for better performance
       });
       
       setCameraStream(stream);
@@ -315,17 +319,21 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       
-      // Set canvas size to video size
-      canvas.width = video.videoWidth || 1920;
-      canvas.height = video.videoHeight || 1080;
+      // Set canvas size to match video's actual resolution for maximum quality
+      canvas.width = video.videoWidth > 0 ? video.videoWidth : 4096;
+      canvas.height = video.videoHeight > 0 ? video.videoHeight : 2160;
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Draw current video frame to canvas
+        // Use high quality settings
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Draw current video frame to canvas at full resolution
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        // Convert to image data
-        const imgSrc = canvas.toDataURL('image/jpeg', 0.9);
+        // Convert to high quality JPEG (95% quality)
+        const imgSrc = canvas.toDataURL('image/jpeg', 0.95);
         
         setSelectedImage(imgSrc);
         setResults(null);
@@ -465,7 +473,43 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
     setAnalysisStep('PHASE 5: Synthesizing tactical intelligence...');
 
     const isBullish = (asset?.change || 0) > 0 || smc.marketStructure === 'HH/HL' || smc.trend === 'BULLISH';
-    const sentiment = isBullish ? 'BULLISH BIAS' : 'BEARISH BIAS';
+    
+    // More sophisticated sentiment calculation
+    let bullishSignals = 0;
+    let bearishSignals = 0;
+    
+    // Technical indicators weight
+    if (technicals.macd.histogram > 0) bullishSignals += 2; else bearishSignals += 2;
+    if (parseFloat(technicals.rsi.toFixed(1)) < 30) bullishSignals += 2;
+    if (parseFloat(technicals.rsi.toFixed(1)) > 70) bearishSignals += 2;
+    if (technicals.stochastic.signal === 'OVERSOLD') bullishSignals += 1;
+    if (technicals.stochastic.signal === 'OVERBOUGHT') bearishSignals += 1;
+    if (technicals.ichimoku.signal === 'BULLISH') bullishSignals += 2; else if (technicals.ichimoku.signal === 'BEARISH') bearishSignals += 2;
+    if (technicals.movingAverages.alignment === 'BULLISH') bullishSignals += 1; else if (technicals.movingAverages.alignment === 'BEARISH') bearishSignals += 1;
+    
+    // SMC weight
+    if (smc.marketStructure === 'HH/HL') bullishSignals += 2;
+    if (smc.marketStructure === 'LH/LL') bearishSignals += 2;
+    if (smc.trend === 'BULLISH') bullishSignals += 1; else if (smc.trend === 'BEARISH') bearishSignals += 1;
+    if (smc.premiumDiscount === 'DISCOUNT') bullishSignals += 1;
+    if (smc.premiumDiscount === 'PREMIUM') bearishSignals += 1;
+    
+    // Price action weight
+    if ((asset?.change || 0) > 0) bullishSignals += 1; else bearishSignals += 1;
+    
+    const finalBullish = bullishSignals > bearishSignals;
+    const strength = Math.abs(bullishSignals - bearishSignals);
+    let sentiment: string;
+    
+    if (strength >= 5) {
+      sentiment = finalBullish ? 'STRONG BULLISH' : 'STRONG BEARISH';
+    } else if (strength >= 3) {
+      sentiment = finalBullish ? 'BULLISH BIAS' : 'BEARISH BIAS';
+    } else if (strength >= 1) {
+      sentiment = finalBullish ? 'WEAK BULLISH' : 'WEAK BEARISH';
+    } else {
+      sentiment = 'NEUTRAL/RANGING';
+    }
 
     let confidence = 60;
     if (detection.ocrConfidence > 90) confidence += 5;
@@ -475,7 +519,26 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
     if (technicals.divergence.detected) confidence += 5;
     if (technicals.adx.value > 25) confidence += 5;
     if (priceDeviation < 0.5) confidence += 3;
-    confidence = Math.min(98, confidence);
+    
+    // Reduce confidence for conflicting signals
+    if (strength < 3) confidence -= 15;
+    if (sentiment.includes('WEAK') || sentiment.includes('NEUTRAL')) confidence -= 10;
+    
+    confidence = Math.min(98, Math.max(30, confidence));
+    
+    // Entry signal logic
+    let entrySignal = 'NO ENTRY';
+    let entryReason = 'Conflicting signals detected';
+    
+    if (strength >= 4 && confidence > 70) {
+      if (finalBullish && technicals.rsi.value < 70 && smc.premiumDiscount !== 'PREMIUM') {
+        entrySignal = 'LONG ENTRY';
+        entryReason = `Strong bullish confluence: MACD ${technicals.macd.histogram > 0 ? 'bullish' : 'bearish'}, RSI ${technicals.rsi.toFixed(0)}, ${smc.marketStructure}`;
+      } else if (!finalBullish && technicals.rsi.value > 30 && smc.premiumDiscount !== 'DISCOUNT') {
+        entrySignal = 'SHORT ENTRY';
+        entryReason = `Strong bearish confluence: MACD ${technicals.macd.histogram > 0 ? 'bullish' : 'bearish'}, RSI ${technicals.rsi.toFixed(0)}, ${smc.marketStructure}`;
+      }
+    }
 
     const detectedPatterns: string[] = [];
     if (pattern.label && pattern.label !== 'RANGING') detectedPatterns.push(pattern.label);
@@ -556,7 +619,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
     // Calculate targets with proper risk-reward ratios
     let tp1, tp2, tp3, sl;
     
-    if (isBullish) {
+    if (finalBullish) {
       // Bullish targets
       tp1 = basePrice + (baseDistance * 1.0); // Conservative (1R)
       tp2 = basePrice + (baseDistance * 2.0); // Moderate (2R)
@@ -616,6 +679,8 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
       liveChange: asset?.changePercent?.toFixed(2) || '0.00',
       priceRangeHigh: detection.priceRangeHigh.toFixed(2),
       priceRangeLow: detection.priceRangeLow.toFixed(2),
+      entrySignal,
+      entryReason,
       patterns: detectedPatterns.slice(0, 5),
       targets: [
         { label: 'Take Profit 1', value: tp1.toFixed(2), pips: (Math.abs(tp1 - basePrice) / pipValue).toFixed(1) },
@@ -654,7 +719,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
       spikeAlert: spike.isSpike,
       spikeSeverity: spike.severity,
       spikePrediction: spike.prediction,
-      commentary: `Chart analysis complete, sir. Screenshot shows ${detection.symbolFull} at ${detection.priceFromImage.toFixed(2)}, current live market price confirmed at ${livePrice.toFixed(2)} — price has ${livePrice > detection.priceFromImage ? 'increased' : 'decreased'} ${priceDeviation.toFixed(2)}% since capture. ${detection.timeframeLabel} timeframe, ${detection.candleCount} candles processed. Market structure: ${smc.marketStructure} with ${smc.trend.toLowerCase()} bias in ${smc.premiumDiscount.toLowerCase()} zone. ${spike.isSpike ? `⚡ CRITICAL ALERT: ${spike.severity} spike activity detected — ${spike.prediction} movement imminent!` : 'No spike anomalies detected, standard conditions.'} Technical indicators show RSI ${technicals.rsi.toFixed(0)}, ADX ${technicals.adx.value.toFixed(0)} (${technicals.adx.trend}), with ${technicals.confluence} confluence factors aligned. ${smc.orderBlocks.length} order block${smc.orderBlocks.length !== 1 ? 's' : ''} mapped. ATR-based targets calculated with risk-reward ratio of 1:${rrRatio}. Recommendation: ${isBullish ? 'LONG' : 'SHORT'} position with ${detectedPatterns[0] || 'current pattern'} confirmation. Standing by for execution, sir.`
+      commentary: `Chart analysis complete, sir. Screenshot shows ${detection.symbolFull} at ${detection.priceFromImage.toFixed(2)}, current live market price confirmed at ${livePrice.toFixed(2)} — price has ${livePrice > detection.priceFromImage ? 'increased' : 'decreased'} ${priceDeviation.toFixed(2)}% since capture. ${detection.timeframeLabel} timeframe, ${detection.candleCount} candles processed. Market structure: ${smc.marketStructure} with ${smc.trend.toLowerCase()} bias in ${smc.premiumDiscount.toLowerCase()} zone. ${spike.isSpike ? `⚡ CRITICAL ALERT: ${spike.severity} spike activity detected — ${spike.prediction} movement imminent!` : 'No spike anomalies detected, standard conditions.'} Technical indicators show RSI ${technicals.rsi.toFixed(0)}, ADX ${technicals.adx.value.toFixed(0)} (${technicals.adx.trend}), MACD ${technicals.macd.histogram > 0 ? 'bullish' : 'bearish'}, with ${technicals.confluence} confluence factors aligned. ${smc.orderBlocks.length} order block${smc.orderBlocks.length !== 1 ? 's' : ''} mapped. ${entrySignal === 'NO ENTRY' ? 'No clear entry signal - wait for better confluence.' : `${entrySignal} recommended: ${entryReason}`} ATR-based targets calculated with risk-reward ratio of 1:${rrRatio}. Standing by for execution, sir.`
     };
 
     setAnalysisProgress(100);
