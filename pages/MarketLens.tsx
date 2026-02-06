@@ -315,7 +315,7 @@ Rules:
     console.warn(`🔄 Falling back to simulation: ${errorMsg}`);
     
     // Fallback to enhanced OCR simulation if API fails
-    return simulateImageOCR(imageBase64, availablePrices);
+    return simulateImageOCR(imageBase64, availablePrices || {});
   }
 }
 
@@ -382,7 +382,10 @@ const TIMEFRAME_LABELS: Record<string, string> = {
 };
 
 // Enhanced OCR/Vision AI for chart image analysis
-function simulateImageOCR(imageSrc: string, availablePrices: Record<string, PriceData>): GeminiImageAnalysis {
+function simulateImageOCR(imageSrc: string, availablePrices: Record<string, PriceData> = {}): GeminiImageAnalysis {
+  // Ensure availablePrices is valid
+  const safePrices = availablePrices || {};
+
   // Create deterministic analysis based on image characteristics
   let hash = 0;
   const sample = imageSrc.substring(imageSrc.length - 200);
@@ -485,9 +488,9 @@ function simulateImageOCR(imageSrc: string, availablePrices: Record<string, Pric
     }
   }
 
-  // Fallback to available symbols if detection fails
-  if (!availablePrices[detectedSymbol]) {
-    const availableSymbols = Object.keys(availablePrices).filter(s => 
+  // Fallback to safe symbols if detection fails
+  if (!safePrices[detectedSymbol]) {
+    const availableSymbols = Object.keys(safePrices).filter(s => 
       !s.startsWith('frx') && !s.startsWith('cry') && !s.startsWith('1HZ')
     );
     const symbolIndex = seed % availableSymbols.length;
@@ -501,7 +504,7 @@ function simulateImageOCR(imageSrc: string, availablePrices: Record<string, Pric
     priceRange: [100, 5000] as [number, number] 
   };
 
-  const liveAsset = availablePrices[detectedSymbol];
+  const liveAsset = safePrices[detectedSymbol];
   const priceFromImage = liveAsset ? liveAsset.price : (meta.priceRange[0] + meta.priceRange[1]) / 2;
 
   // Smart timeframe detection based on image characteristics
@@ -548,7 +551,7 @@ function simulateImageOCR(imageSrc: string, availablePrices: Record<string, Pric
   };
 }
 
-const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
+const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
