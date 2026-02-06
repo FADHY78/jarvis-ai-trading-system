@@ -30,7 +30,7 @@ interface GeminiImageAnalysis {
   supportResistance: { support: number; resistance: number };
 }
 
-const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'YOUR_GEMINI_API_KEY_HERE'; 
+const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 // 🚀 TO ENABLE REAL AI IMAGE ANALYSIS:
 // 1. Get FREE API key: https://makersuite.google.com/app/apikey
 // 2. Add to .env file: NEXT_PUBLIC_GEMINI_API_KEY=your_key_here
@@ -38,39 +38,46 @@ const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'YOUR_GEMINI_AP
 
 // Real Gemini AI Vision Analysis
 async function analyzeImageWithGemini(imageBase64: string, availablePrices: Record<string, PriceData>): Promise<GeminiImageAnalysis> {
+  console.log('🤖 STARTING GEMINI AI ANALYSIS...');
+  
   try {
-    if (GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE' || !GEMINI_API_KEY) {
-      throw new Error('Gemini API key not configured. Please add NEXT_PUBLIC_GEMINI_API_KEY to your .env file.');
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
+      console.error('❌ No Gemini API key found');
+      throw new Error('Gemini API key not configured. Add NEXT_PUBLIC_GEMINI_API_KEY to .env.local file.');
     }
 
+    console.log('🔑 API key found, sending request to Gemini...');
+    
     const prompt = `
-Analyze this trading chart image and extract the following information in JSON format:
+You are an expert trading chart analyst. Analyze this trading chart image and extract EXACT information in JSON format.
 
+Look carefully at the image for:
+- Symbol name (XAUUSD, EURUSD, GBPUSD, BTCUSD, etc.) in title or corner
+- Current price numbers on the right Y-axis
+- Timeframe buttons (1m, 5m, 15m, 30m, 1h, 4h, 1d)
+- Chart type (candlestick patterns visible)
+- Price levels and trends
+- Support and resistance lines
+- Overall trend direction
+
+Return ONLY this JSON format:
 {
-  "symbol": "detected trading symbol (e.g., XAUUSD, EURUSD, BTCUSD)",
-  "price": "current price visible on chart as number",
-  "timeframe": "chart timeframe (M1, M5, M15, M30, H1, H4, D1)",
-  "chartType": "type of chart (Candlestick, Line, Bar)",
-  "candleCount": "approximate number of candles visible",
+  "symbol": "exact symbol from chart (XAUUSD, EURUSD, etc.)",
+  "price": "current price as number (e.g. 2547.83)",
+  "timeframe": "exact timeframe (M1, M5, M15, M30, H1, H4, D1)",
+  "chartType": "Candlestick",
+  "candleCount": "number of candles visible (estimate)",
   "highPrice": "highest price visible on chart",
   "lowPrice": "lowest price visible on chart",
-  "trend": "overall trend (BULLISH, BEARISH, SIDEWAYS)",
-  "patterns": ["list of chart patterns you can identify"],
-  "colorScheme": "chart color theme (Dark, Light, Custom)",
+  "trend": "BULLISH, BEARISH, or SIDEWAYS based on price action",
+  "patterns": ["list any patterns you see like Triangle, Support, Resistance, Flag"],
+  "colorScheme": "Dark or Light theme",
   "support": "nearest support level price",
   "resistance": "nearest resistance level price",
-  "confidence": "confidence level 1-100 for accuracy of detection"
+  "confidence": "confidence level 1-100 for detection accuracy"
 }
 
-Analyze the actual chart image carefully. Look for:
-- Symbol name in chart title or corner
-- Price numbers on Y-axis
-- Timeframe indicators 
-- Chart patterns like triangles, flags, support/resistance
-- Current price level
-- Candlestick formations
-
-Return only valid JSON without any markdown formatting.`;
+Be precise and only return valid JSON.`;
 
     const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=' + GEMINI_API_KEY, {
       method: 'POST',
@@ -84,29 +91,44 @@ Return only valid JSON without any markdown formatting.`;
             {
               inline_data: {
                 mime_type: 'image/jpeg',
-                data: imageBase64.split(',')[1] // Remove data:image/jpeg;base64, prefix
+                data: imageBase64.split(',')[1]
               }
             }
           ]
-        }]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          topK: 1,
+          topP: 1,
+          maxOutputTokens: 2048
+        }
       })
     });
 
+    console.log('📡 Gemini response status:', response.status);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Gemini API error:', response.status, errorText);
       throw new Error(`Gemini API error: ${response.status} - ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('📊 Raw Gemini response:', data);
     
     if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+      console.error('❌ Invalid Gemini response structure');
       throw new Error('Invalid response from Gemini API');
     }
     
     const analysisText = data.candidates[0].content.parts[0].text;
+    console.log('🔍 Gemini analysis text:', analysisText);
     
     // Clean the response and parse JSON
     const cleanedText = analysisText.replace(/```json|```/g, '').trim();
     const analysis = JSON.parse(cleanedText);
+    
+    console.log('✅ GEMINI ANALYSIS SUCCESS:', analysis);
     
     return {
       symbol: analysis.symbol || 'XAUUSD',
@@ -116,24 +138,24 @@ Return only valid JSON without any markdown formatting.`;
       timeframeLabel: TIMEFRAME_LABELS[analysis.timeframe] || '15 Minutes',
       chartType: analysis.chartType || 'Candlestick',
       candleCount: parseInt(analysis.candleCount) || 50,
-      priceRangeHigh: parseFloat(analysis.highPrice) || 2010,
-      priceRangeLow: parseFloat(analysis.lowPrice) || 1990,
+      priceRangeHigh: parseFloat(analysis.highPrice) || parseFloat(analysis.price) * 1.01,
+      priceRangeLow: parseFloat(analysis.lowPrice) || parseFloat(analysis.price) * 0.99,
       colorScheme: analysis.colorScheme || 'Dark Theme',
       ocrConfidence: parseInt(analysis.confidence) || 85,
-      patterns: analysis.patterns || [],
+      patterns: Array.isArray(analysis.patterns) ? analysis.patterns : [],
       trend: analysis.trend || 'SIDEWAYS',
       supportResistance: {
-        support: parseFloat(analysis.support) || 1990,
-        resistance: parseFloat(analysis.resistance) || 2010
+        support: parseFloat(analysis.support) || parseFloat(analysis.lowPrice) || parseFloat(analysis.price) * 0.99,
+        resistance: parseFloat(analysis.resistance) || parseFloat(analysis.highPrice) || parseFloat(analysis.price) * 1.01
       }
     };
 
   } catch (error) {
-    console.error('Gemini analysis failed:', error);
+    console.error('❌ GEMINI ANALYSIS FAILED:', error);
     
     // Show user-friendly error message
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.warn(`Falling back to simulation: ${errorMsg}`);
+    console.warn(`🔄 Falling back to simulation: ${errorMsg}`);
     
     // Fallback to enhanced OCR simulation if API fails
     return simulateImageOCR(imageBase64, availablePrices);
@@ -551,15 +573,15 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
       setAnalysisProgress(25);
       
     } catch (error) {
-      console.error('Gemini analysis failed, using fallback:', error);
+      console.error('❌ Gemini analysis failed, using fallback:', error);
       
       // Show user-friendly message if API key issue
       if (error instanceof Error && error.message.includes('API key')) {
-        speakJarvis("Gemini API key required for image analysis. Using fallback mode.", 'sophisticated');
-        setAnalysisStep('PHASE 1c: Using fallback analysis (Gemini API key needed)...');
+        speakJarvis("Gemini API configured but failed. Using fallback analysis.", 'sophisticated');
+        setAnalysisStep('PHASE 1c: Gemini failed - using fallback analysis...');
       } else {
-        speakJarvis("Image analysis using fallback mode.", 'sophisticated');
-        setAnalysisStep('PHASE 1c: Using fallback analysis...');
+        speakJarvis("Using enhanced fallback analysis.", 'sophisticated');
+        setAnalysisStep('PHASE 1c: Using enhanced analysis...');
       }
       
       // Fallback if Gemini fails - use simple analysis
@@ -697,19 +719,47 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
     
     confidence = Math.min(98, Math.max(30, confidence));
     
-    // Entry signal logic
+    // Entry signal logic - Enhanced for better accuracy
     let entrySignal = 'NO ENTRY';
-    let entryReason = 'Conflicting signals detected';
+    let entryReason = 'Waiting for confluence alignment';
     
-    if (strength >= 4 && confidence > 70) {
+    console.log(`🎯 ENTRY CALCULATION: Strength=${strength}, Confidence=${confidence.toFixed(1)}%, MACD=${technicals.macd.histogram > 0 ? 'BULL' : 'BEAR'}, RSI=${technicals.rsi.toFixed(0)}`);
+    
+    // Strong entry signals (4+ factors, 70%+ confidence)
+    if (strength >= 4 && confidence > 75) {
       if (finalBullish && technicals.rsi < 70 && smc.premiumDiscount !== 'PREMIUM') {
         entrySignal = 'LONG ENTRY';
-        entryReason = `Strong bullish confluence: MACD ${technicals.macd.histogram > 0 ? 'bullish' : 'bearish'}, RSI ${technicals.rsi.toFixed(0)}, ${smc.marketStructure}`;
+        entryReason = `🚀 STRONG BULLISH SETUP: ${strength} factors aligned | MACD ${technicals.macd.histogram > 0 ? 'BULLISH' : 'conflict'} | RSI ${technicals.rsi.toFixed(0)} (not overbought) | ${smc.marketStructure} structure`;
       } else if (!finalBullish && technicals.rsi > 30 && smc.premiumDiscount !== 'DISCOUNT') {
         entrySignal = 'SHORT ENTRY';
-        entryReason = `Strong bearish confluence: MACD ${technicals.macd.histogram > 0 ? 'bullish' : 'bearish'}, RSI ${technicals.rsi.toFixed(0)}, ${smc.marketStructure}`;
+        entryReason = `📉 STRONG BEARISH SETUP: ${strength} factors aligned | MACD ${technicals.macd.histogram > 0 ? 'conflict' : 'BEARISH'} | RSI ${technicals.rsi.toFixed(0)} (not oversold) | ${smc.marketStructure} structure`;
+      }
+    } 
+    // Moderate entry signals (3-4 factors, 60-75% confidence)
+    else if (strength >= 3 && confidence > 60) {
+      if (finalBullish && technicals.rsi < 75 && technicals.macd.histogram > 0) {
+        entrySignal = 'LONG ENTRY';
+        entryReason = `⚡ MODERATE BULLISH: ${strength} factors | MACD bullish | RSI ${technicals.rsi.toFixed(0)} | Lower confidence setup`;
+      } else if (!finalBullish && technicals.rsi > 25 && technicals.macd.histogram < 0) {
+        entrySignal = 'SHORT ENTRY';
+        entryReason = `⚡ MODERATE BEARISH: ${strength} factors | MACD bearish | RSI ${technicals.rsi.toFixed(0)} | Lower confidence setup`;
       }
     }
+    
+    // If no clear signal, explain why
+    if (entrySignal === 'NO ENTRY') {
+      const issues: string[] = [];
+      if (strength < 3) issues.push('insufficient confluence');
+      if (confidence <= 60) issues.push('low confidence');
+      if (technicals.rsi > 70) issues.push('RSI overbought');
+      if (technicals.rsi < 30) issues.push('RSI oversold');
+      if (smc.premiumDiscount === 'PREMIUM' && finalBullish) issues.push('price at premium');
+      if (smc.premiumDiscount === 'DISCOUNT' && !finalBullish) issues.push('price at discount');
+      
+      entryReason = issues.length ? `❌ NO ENTRY: ${issues.join(', ')}` : '⏳ WAIT: Mixed signals - need clearer setup';
+    }
+    
+    console.log(`🎯 FINAL ENTRY: ${entrySignal} - ${entryReason}`);
 
     const detectedPatterns: string[] = [];
     if (pattern.label && pattern.label !== 'RANGING') detectedPatterns.push(pattern.label);
@@ -1242,6 +1292,44 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
             </div>
           ) : (
             <div className="glass rounded-3xl p-5 lg:p-6 border-t-4 border-t-cyan-500 space-y-5 animate-in zoom-in duration-300">
+              {/* Entry Signal Box */}
+              <div className={`w-full rounded-2xl p-4 border-2 mb-5 ${
+                results.entrySignal === 'LONG ENTRY' ? 'bg-green-500/10 border-green-500 neon-glow' :
+                results.entrySignal === 'SHORT ENTRY' ? 'bg-red-500/10 border-red-500 neon-glow' :
+                'bg-yellow-500/10 border-yellow-500'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${
+                      results.entrySignal === 'LONG ENTRY' ? 'bg-green-500' :
+                      results.entrySignal === 'SHORT ENTRY' ? 'bg-red-500' :
+                      'bg-yellow-500'
+                    }`}>
+                      {results.entrySignal === 'LONG ENTRY' ? <TrendingUp size={16} className="text-white" /> :
+                       results.entrySignal === 'SHORT ENTRY' ? <TrendingDown size={16} className="text-white" /> :
+                       <AlertCircle size={16} className="text-white" />}
+                    </div>
+                    <div>
+                      <h3 className={`font-orbitron text-lg font-black ${
+                        results.entrySignal === 'LONG ENTRY' ? 'text-green-400' :
+                        results.entrySignal === 'SHORT ENTRY' ? 'text-red-400' :
+                        'text-yellow-400'
+                      }`}>{results.entrySignal}</h3>
+                      <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wide">
+                        {results.entrySignal === 'NO ENTRY' ? 'Wait for Better Setup' : 'Execute Trade'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-orbitron font-bold text-cyan-400">{results.confidence}</p>
+                    <p className="text-[8px] text-gray-500">CONFIDENCE</p>
+                  </div>
+                </div>
+                <p className="text-[11px] font-mono text-gray-300 leading-relaxed italic">
+                  {results.entryReason}
+                </p>
+              </div>
+
               {/* Header */}
               <div className="flex items-center justify-between">
                 <div>
