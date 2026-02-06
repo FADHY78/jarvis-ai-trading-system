@@ -227,6 +227,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Cleanup camera stream on unmount
+  // Cleanup camera stream on unmount
   useEffect(() => {
     return () => {
       if (cameraStream) {
@@ -257,26 +258,44 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
 
   const startCamera = async () => {
     try {
+      // Request camera access with high quality settings
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
-          facingMode: 'environment', // Use back camera on mobile
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
+          facingMode: 'environment', // Prefer back camera on mobile
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
+          frameRate: { ideal: 30 }
         } 
       });
+      
       setCameraStream(stream);
       setIsCameraMode(true);
       setSelectedImage(null);
       setResults(null);
       
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      // Wait for video element to be ready
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(err => {
+            console.log('Video play error:', err);
+            // Try without play() - some browsers autoplay
+          });
+        }
+      }, 100);
       
-      speakJarvis("Camera activated. Frame your trading chart and capture.", 'sophisticated');
+      speakJarvis("Camera activated. Frame your chart and tap capture.", 'sophisticated');
     } catch (error) {
       console.error('Camera access error:', error);
-      speakJarvis("Camera access denied. Please check permissions.", 'sophisticated');
+      const errorMessage = (error as Error).message;
+      if (errorMessage.includes('Permission denied')) {
+        alert('Camera permission denied. Please allow camera access in your browser settings and try again.');
+      } else if (errorMessage.includes('NotFound')) {
+        alert('No camera found on this device.');
+      } else {
+        alert('Camera error: ' + errorMessage);
+      }
+      speakJarvis("Camera access failed. Please check permissions.", 'sophisticated');
     }
   };
 
@@ -286,6 +305,9 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
       setCameraStream(null);
     }
     setIsCameraMode(false);
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
   };
 
   const captureFromCamera = () => {
@@ -293,24 +315,30 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      // Set canvas size to video size
+      canvas.width = video.videoWidth || 1920;
+      canvas.height = video.videoHeight || 1080;
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(video, 0, 0);
-        const imgSrc = canvas.toDataURL('image/png');
+        // Draw current video frame to canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to image data
+        const imgSrc = canvas.toDataURL('image/jpeg', 0.9);
         
         setSelectedImage(imgSrc);
         setResults(null);
         setShowSymbolSelector(true);
+        
+        // Stop camera after capture
         stopCamera();
         
         // Smart default: Use XAUUSD if available, or first available symbol
         const defaultSymbol = prices['XAUUSD'] ? 'XAUUSD' : Object.keys(prices).filter(s => !s.startsWith('frx') && !s.startsWith('cry') && !s.startsWith('1HZ'))[0];
         setSelectedSymbol(defaultSymbol);
         
-        speakJarvis("Chart captured. Please confirm the symbol before analysis.", 'sophisticated');
+        speakJarvis("Chart captured successfully. Please confirm the symbol.", 'sophisticated');
       }
     }
   };
@@ -692,18 +720,34 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
                     ref={videoRef} 
                     autoPlay 
                     playsInline
+                    muted
                     className="w-full h-full object-cover"
+                    style={{ transform: 'scaleX(-1)' }} // Mirror effect for better UX
                   />
+                  <canvas ref={canvasRef} className="hidden" />
+                  
+                  {/* Camera UI Overlay */}
                   <div className="absolute inset-0 pointer-events-none">
-                    {/* Camera viewfinder overlay */}
-                    <div className="absolute inset-4 border-2 border-dashed border-cyan-500/40 rounded-lg"></div>
-                    <div className="absolute top-3 left-3 bg-red-500/80 px-3 py-1 rounded flex items-center gap-2">
+                    {/* Viewfinder guide */}
+                    <div className="absolute inset-6 border-2 border-dashed border-cyan-400/60 rounded-xl animate-pulse"></div>
+                    <div className="absolute inset-12 border border-cyan-400/30 rounded-lg"></div>
+                    
+                    {/* Live indicator */}
+                    <div className="absolute top-4 left-4 bg-red-500 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
                       <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                      <span className="text-[9px] font-mono text-white font-bold">LIVE</span>
+                      <span className="text-[9px] font-mono text-white font-bold tracking-wider">LIVE</span>
                     </div>
-                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/80 px-4 py-2 rounded-lg border border-cyan-500/30">
-                      <p className="text-[9px] font-mono text-cyan-400 text-center">Frame your chart within the guide</p>
+                    
+                    {/* Instructions */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 px-4 py-2 rounded-xl border border-cyan-500/40 backdrop-blur">
+                      <p className="text-[10px] font-mono text-cyan-400 text-center font-bold">📊 Frame your chart within guides</p>
                     </div>
+                    
+                    {/* Focus indicators */}
+                    <div className="absolute top-1/4 left-1/4 w-6 h-6 border-l-2 border-t-2 border-cyan-400 rounded-tl-lg"></div>
+                    <div className="absolute top-1/4 right-1/4 w-6 h-6 border-r-2 border-t-2 border-cyan-400 rounded-tr-lg"></div>
+                    <div className="absolute bottom-1/4 left-1/4 w-6 h-6 border-l-2 border-b-2 border-cyan-400 rounded-bl-lg"></div>
+                    <div className="absolute bottom-1/4 right-1/4 w-6 h-6 border-r-2 border-b-2 border-cyan-400 rounded-br-lg"></div>
                   </div>
                 </>
               ) : selectedImage ? (
@@ -773,15 +817,14 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
             
             <div className="p-3 bg-black/20 flex gap-2">
               <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
-              <canvas ref={canvasRef} className="hidden" />
               
               {isCameraMode ? (
                 <>
                   <button 
                     onClick={captureFromCamera} 
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-cyan-500 hover:bg-cyan-600 border border-cyan-400 text-white rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold tracking-widest neon-glow"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 border border-cyan-400 text-white rounded-xl transition-all font-orbitron text-[11px] uppercase font-bold tracking-widest shadow-lg neon-glow"
                   >
-                    <Square size={14} /> Capture Chart
+                    <Camera size={16} /> Capture Chart
                   </button>
                   <button 
                     onClick={stopCamera} 
@@ -798,7 +841,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
                   <button 
                     onClick={startCamera} 
                     disabled={isAnalyzing}
-                    className="flex items-center justify-center gap-2 px-4 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold disabled:opacity-30"
+                    className="flex items-center justify-center gap-2 px-4 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold disabled:opacity-30 hover:neon-glow"
                   >
                     <Camera size={14} /> Camera
                   </button>
