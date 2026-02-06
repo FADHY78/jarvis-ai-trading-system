@@ -36,6 +36,150 @@ const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 // 2. Add to .env file: NEXT_PUBLIC_GEMINI_API_KEY=your_key_here
 // 3. Restart your app - Jarvis will now REALLY analyze your charts! 🎯
 
+// =============== AI TRADING INSIGHTS GENERATOR ===============
+function generateTradingInsights(data: any): Array<{ type: string; message: string; action?: string }> {
+  const insights: Array<{ type: string; message: string; action?: string }> = [];
+  
+  const { sentiment, confidence, finalBullish, strength, technicals, smc, spike, entrySignal, 
+          entryLow, entryHigh, tp1, tp2, tp3, sl, rrRatio, detection, livePrice, priceDeviation } = data;
+  
+  // === ENTRY TIMING INSIGHTS ===
+  if (entrySignal !== 'NO ENTRY') {
+    if (smc.premiumDiscount === 'DISCOUNT' && finalBullish) {
+      insights.push({
+        type: 'OPPORTUNITY',
+        message: `Price is in DISCOUNT zone - optimal for LONG entries. Smart money typically buys here.`,
+        action: `Wait for price to reach ${entryLow.toFixed(2)} - ${entryHigh.toFixed(2)} entry zone`
+      });
+    } else if (smc.premiumDiscount === 'PREMIUM' && !finalBullish) {
+      insights.push({
+        type: 'OPPORTUNITY',
+        message: `Price is in PREMIUM zone - optimal for SHORT entries. Smart money typically sells here.`,
+        action: `Wait for price to reach ${entryLow.toFixed(2)} - ${entryHigh.toFixed(2)} entry zone`
+      });
+    }
+  }
+  
+  // === RISK WARNINGS ===
+  if (technicals.rsi > 70) {
+    insights.push({
+      type: 'WARNING',
+      message: `RSI at ${technicals.rsi.toFixed(0)} indicates OVERBOUGHT conditions. Potential reversal or pullback likely.`,
+      action: finalBullish ? 'Consider waiting for RSI cooldown before entering longs' : 'Strong confirmation for shorts'
+    });
+  } else if (technicals.rsi < 30) {
+    insights.push({
+      type: 'WARNING',
+      message: `RSI at ${technicals.rsi.toFixed(0)} indicates OVERSOLD conditions. Potential bounce or reversal soon.`,
+      action: !finalBullish ? 'Consider waiting for RSI recovery before entering shorts' : 'Strong confirmation for longs'
+    });
+  }
+  
+  if (spike.isSpike && spike.severity !== 'LOW') {
+    insights.push({
+      type: 'RISK',
+      message: `⚡ ${spike.severity.toUpperCase()} SPIKE ALERT: Unusual volatility detected. ${spike.prediction} movement expected.`,
+      action: 'Reduce position size or wait for volatility to stabilize'
+    });
+  }
+  
+  // === DIVERGENCE INSIGHT ===
+  if (technicals.divergence?.detected) {
+    insights.push({
+      type: 'INSIGHT',
+      message: `${technicals.divergence.type.toUpperCase()} DIVERGENCE detected - price and momentum are diverging.`,
+      action: technicals.divergence.type === 'BULLISH' ? 'Potential bullish reversal forming' : 'Potential bearish reversal forming'
+    });
+  }
+  
+  // === TREND STRENGTH ===
+  if (technicals.adx.value > 40) {
+    insights.push({
+      type: 'INSIGHT',
+      message: `ADX at ${technicals.adx.value.toFixed(0)} shows VERY STRONG trend. Trend-following strategies favored.`,
+      action: `Trade WITH the trend (${technicals.adx.direction})`
+    });
+  } else if (technicals.adx.value < 20) {
+    insights.push({
+      type: 'WARNING',
+      message: `ADX at ${technicals.adx.value.toFixed(0)} shows WEAK/RANGING market. Breakout strategies may fail.`,
+      action: 'Consider range trading or wait for trend development'
+    });
+  }
+  
+  // === BOLLINGER SQUEEZE ===
+  if (technicals.bollingerBands?.squeeze) {
+    insights.push({
+      type: 'OPPORTUNITY',
+      message: `Bollinger Band SQUEEZE detected - volatility compression indicates imminent breakout.`,
+      action: 'Prepare for breakout trade - watch for direction confirmation'
+    });
+  }
+  
+  // === SMC STRUCTURE (bosChoch is string[]) ===
+  if (smc.bosChoch && smc.bosChoch.length > 0) {
+    const bosChochSignal = smc.bosChoch.join(' ').toUpperCase();
+    if (bosChochSignal.includes('CHOCH')) {
+      const direction = bosChochSignal.includes('BULLISH') ? 'BULLISH' : 'BEARISH';
+      insights.push({
+        type: 'INSIGHT',
+        message: `CHANGE OF CHARACTER (CHOCH) detected - potential ${direction.toLowerCase()} reversal in progress.`,
+        action: `New ${direction} trend may be forming - look for confirmation`
+      });
+    } else if (bosChochSignal.includes('BOS')) {
+      const direction = smc.trend || 'current';
+      insights.push({
+        type: 'INSIGHT',
+        message: `BREAK OF STRUCTURE (BOS) confirms ${direction} continuation.`,
+        action: `Trend continuation trade setup - ${direction === 'BULLISH' ? 'buy pullbacks' : 'sell rallies'}`
+      });
+    }
+  }
+  
+  // === ORDER BLOCKS ===
+  if (smc.orderBlocks?.length > 0) {
+    const nearestOB = smc.orderBlocks[0];
+    insights.push({
+      type: 'INSIGHT',
+      message: `${nearestOB.type} ORDER BLOCK identified at ${nearestOB.price?.toFixed(2) || 'nearby level'}. Institutional activity zone.`,
+      action: nearestOB.type === 'BULLISH' ? 'Look for buy entries near this level' : 'Look for sell entries near this level'
+    });
+  }
+  
+  // === RISK MANAGEMENT ADVICE ===
+  const rrNum = parseFloat(rrRatio);
+  if (rrNum >= 2) {
+    insights.push({
+      type: 'OPPORTUNITY',
+      message: `Risk-Reward ratio of 1:${rrRatio} exceeds 1:2 minimum. Trade setup meets professional standards.`,
+      action: 'Execute with proper position sizing (1-2% account risk max)'
+    });
+  } else if (rrNum < 1.5 && rrNum > 0) {
+    insights.push({
+      type: 'WARNING',
+      message: `Risk-Reward ratio of 1:${rrRatio} is below optimal. Consider adjusting targets or stop loss.`,
+      action: 'Widen TP or tighten SL to improve R:R'
+    });
+  }
+  
+  // === CONFIDENCE-BASED ADVICE ===
+  if (confidence > 80) {
+    insights.push({
+      type: 'INSIGHT',
+      message: `High confidence setup (${confidence.toFixed(0)}%) with ${strength} factors aligned. Strong trade potential.`,
+      action: 'Consider full position size'
+    });
+  } else if (confidence < 50) {
+    insights.push({
+      type: 'WARNING',
+      message: `Low confidence (${confidence.toFixed(0)}%) due to mixed signals. High uncertainty.`,
+      action: 'Reduce position size or wait for better setup'
+    });
+  }
+  
+  return insights.slice(0, 5); // Return top 5 most relevant insights
+}
+
 // Real Gemini AI Vision Analysis
 async function analyzeImageWithGemini(imageBase64: string, availablePrices: Record<string, PriceData>): Promise<GeminiImageAnalysis> {
   console.log('🤖 STARTING GEMINI AI ANALYSIS...');
@@ -46,40 +190,28 @@ async function analyzeImageWithGemini(imageBase64: string, availablePrices: Reco
       throw new Error('Gemini API key not configured. Add NEXT_PUBLIC_GEMINI_API_KEY to .env.local file.');
     }
 
-    console.log('🔑 API key found, sending request to Gemini...');
+    console.log('🔑 API key found, sending request to Gemini 1.5 Flash...');
     
-    const prompt = `
-You are an expert trading chart analyst. Analyze this trading chart image and extract EXACT information in JSON format.
+    const prompt = `You are an expert forex/crypto chart reader. Analyze this trading chart screenshot and extract the EXACT data you can see.
 
-Look carefully at the image for:
-- Symbol name (XAUUSD, EURUSD, GBPUSD, BTCUSD, etc.) in title or corner
-- Current price numbers on the right Y-axis
-- Timeframe buttons (1m, 5m, 15m, 30m, 1h, 4h, 1d)
-- Chart type (candlestick patterns visible)
-- Price levels and trends
-- Support and resistance lines
-- Overall trend direction
+CRITICAL - Read these EXACTLY from the image:
+1. SYMBOL: Look at top-left corner, window title, or chart header for pair name (XAUUSD, EURUSD, GBPUSD, BTCUSD, USDJPY, etc.)
+2. PRICE: Read the CURRENT price from the right Y-axis or the last candle's close price
+3. TIMEFRAME: Find the timeframe selector/button (M1, M5, M15, M30, H1, H4, D1, W1)
+4. TREND: Is price going UP (bullish), DOWN (bearish), or SIDEWAYS?
 
-Return ONLY this JSON format:
-{
-  "symbol": "exact symbol from chart (XAUUSD, EURUSD, etc.)",
-  "price": "current price as number (e.g. 2547.83)",
-  "timeframe": "exact timeframe (M1, M5, M15, M30, H1, H4, D1)",
-  "chartType": "Candlestick",
-  "candleCount": "number of candles visible (estimate)",
-  "highPrice": "highest price visible on chart",
-  "lowPrice": "lowest price visible on chart",
-  "trend": "BULLISH, BEARISH, or SIDEWAYS based on price action",
-  "patterns": ["list any patterns you see like Triangle, Support, Resistance, Flag"],
-  "colorScheme": "Dark or Light theme",
-  "support": "nearest support level price",
-  "resistance": "nearest resistance level price",
-  "confidence": "confidence level 1-100 for detection accuracy"
-}
+Return ONLY valid JSON (no markdown):
+{"symbol":"XAUUSD","price":2547.83,"timeframe":"M15","highPrice":2550.00,"lowPrice":2540.00,"trend":"BULLISH","patterns":["Support Level","Resistance"],"confidence":85}
 
-Be precise and only return valid JSON.`;
+Rules:
+- symbol: MUST be exact trading pair from chart (e.g., XAUUSD not "Gold")
+- price: MUST be the current/last price as a NUMBER (not string)
+- timeframe: Use format M1, M5, M15, M30, H1, H4, D1
+- If you can't read something clearly, make your best estimate
+- Return ONLY the JSON object, nothing else`;
 
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=' + GEMINI_API_KEY, {
+    // Using Gemini 1.5 Flash - faster and better at image analysis
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_API_KEY, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -124,29 +256,54 @@ Be precise and only return valid JSON.`;
     const analysisText = data.candidates[0].content.parts[0].text;
     console.log('🔍 Gemini analysis text:', analysisText);
     
-    // Clean the response and parse JSON
-    const cleanedText = analysisText.replace(/```json|```/g, '').trim();
+    // Clean the response and parse JSON - handle various formats
+    let cleanedText = analysisText.replace(/```json|```/g, '').trim();
+    
+    // Find JSON object in the response (in case there's extra text)
+    const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleanedText = jsonMatch[0];
+    }
+    
     const analysis = JSON.parse(cleanedText);
     
-    console.log('✅ GEMINI ANALYSIS SUCCESS:', analysis);
+    // Normalize symbol (handle variations)
+    let symbol = (analysis.symbol || 'XAUUSD').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    // Handle common variations
+    const symbolAliases: Record<string, string> = {
+      'GOLD': 'XAUUSD', 'XAU': 'XAUUSD', 'XAUUSD': 'XAUUSD',
+      'EURUSD': 'EURUSD', 'EUR': 'EURUSD',
+      'GBPUSD': 'GBPUSD', 'GBP': 'GBPUSD', 'CABLE': 'GBPUSD',
+      'USDJPY': 'USDJPY', 'JPY': 'USDJPY',
+      'BTCUSD': 'BTCUSD', 'BTC': 'BTCUSD', 'BITCOIN': 'BTCUSD',
+      'NAS100': 'NAS100', 'NASDAQ': 'NAS100', 'NDX': 'NAS100', 'USTEC': 'NAS100',
+      'SPX500': 'SPX500', 'SPX': 'SPX500', 'SP500': 'SPX500'
+    };
+    symbol = symbolAliases[symbol] || symbol;
+    
+    // Parse price (handle string or number)
+    const price = typeof analysis.price === 'number' ? analysis.price : parseFloat(String(analysis.price).replace(/[^0-9.]/g, '')) || 2000;
+    
+    console.log('✅ GEMINI AI DETECTED:', { symbol, price, timeframe: analysis.timeframe, trend: analysis.trend });
     
     return {
-      symbol: analysis.symbol || 'XAUUSD',
-      symbolFull: `${analysis.symbol} (${getSymbolName(analysis.symbol)})`,
-      priceFromImage: parseFloat(analysis.price) || 2000,
+      symbol: symbol,
+      symbolFull: `${symbol} (${getSymbolName(symbol)})`,
+      priceFromImage: price,
       timeframe: analysis.timeframe || 'M15',
       timeframeLabel: TIMEFRAME_LABELS[analysis.timeframe] || '15 Minutes',
-      chartType: analysis.chartType || 'Candlestick',
+      chartType: 'Candlestick',
       candleCount: parseInt(analysis.candleCount) || 50,
-      priceRangeHigh: parseFloat(analysis.highPrice) || parseFloat(analysis.price) * 1.01,
-      priceRangeLow: parseFloat(analysis.lowPrice) || parseFloat(analysis.price) * 0.99,
-      colorScheme: analysis.colorScheme || 'Dark Theme',
-      ocrConfidence: parseInt(analysis.confidence) || 85,
+      priceRangeHigh: parseFloat(analysis.highPrice) || price * 1.01,
+      priceRangeLow: parseFloat(analysis.lowPrice) || price * 0.99,
+      colorScheme: 'Dark Theme',
+      ocrConfidence: parseInt(analysis.confidence) || 90,
       patterns: Array.isArray(analysis.patterns) ? analysis.patterns : [],
       trend: analysis.trend || 'SIDEWAYS',
       supportResistance: {
-        support: parseFloat(analysis.support) || parseFloat(analysis.lowPrice) || parseFloat(analysis.price) * 0.99,
-        resistance: parseFloat(analysis.resistance) || parseFloat(analysis.highPrice) || parseFloat(analysis.price) * 1.01
+        support: parseFloat(analysis.support) || parseFloat(analysis.lowPrice) || price * 0.99,
+        resistance: parseFloat(analysis.resistance) || parseFloat(analysis.highPrice) || price * 1.01
       }
     };
 
@@ -164,13 +321,23 @@ Be precise and only return valid JSON.`;
 
 function getSymbolName(symbol: string): string {
   const symbolMap: Record<string, string> = {
-    'XAUUSD': 'Gold',
+    'XAUUSD': 'Gold/USD',
     'EURUSD': 'Euro/Dollar',
     'GBPUSD': 'Pound/Dollar',
     'USDJPY': 'Dollar/Yen',
-    'BTCUSD': 'Bitcoin',
+    'USDCHF': 'Dollar/Swiss',
+    'AUDUSD': 'Aussie/Dollar',
+    'USDCAD': 'Dollar/CAD',
+    'NZDUSD': 'Kiwi/Dollar',
+    'BTCUSD': 'Bitcoin/USD',
+    'ETHUSD': 'Ethereum/USD',
     'NAS100': 'Nasdaq 100',
-    'SPX500': 'S&P 500'
+    'SPX500': 'S&P 500',
+    'US30': 'Dow Jones',
+    'USTEC': 'US Tech 100',
+    'XAGUSD': 'Silver/USD',
+    'GBPJPY': 'Pound/Yen',
+    'EURJPY': 'Euro/Yen'
   };
   return symbolMap[symbol] || symbol;
 }
@@ -667,31 +834,168 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
 
     const isBullish = (asset?.change || 0) > 0 || smc.marketStructure === 'HH/HL' || smc.trend === 'BULLISH';
     
-    // More sophisticated sentiment calculation
-    let bullishSignals = 0;
-    let bearishSignals = 0;
+    // =============== ADVANCED ALGORITHMIC ANALYSIS ENGINE ===============
+    // Multi-Factor Weighted Score System with Machine Learning-like Logic
     
-    // Technical indicators weight
-    if (technicals.macd.histogram > 0) bullishSignals += 2; else bearishSignals += 2;
-    if (technicals.rsi < 30) bullishSignals += 2;
-    if (technicals.rsi > 70) bearishSignals += 2;
-    if (technicals.stochastic.signal === 'OVERSOLD') bullishSignals += 1;
-    if (technicals.stochastic.signal === 'OVERBOUGHT') bearishSignals += 1;
-    if (technicals.ichimoku.signal === 'BULLISH') bullishSignals += 2; else if (technicals.ichimoku.signal === 'BEARISH') bearishSignals += 2;
-    if (technicals.movingAverages.alignment === 'BULLISH') bullishSignals += 1; else if (technicals.movingAverages.alignment === 'BEARISH') bearishSignals += 1;
+    let bullishScore = 0;
+    let bearishScore = 0;
+    const signals: { factor: string; weight: number; direction: 'BULL' | 'BEAR' | 'NEUTRAL' }[] = [];
     
-    // SMC weight
-    if (smc.marketStructure === 'HH/HL') bullishSignals += 2;
-    if (smc.marketStructure === 'LH/LL') bearishSignals += 2;
-    if (smc.trend === 'BULLISH') bullishSignals += 1; else if (smc.trend === 'BEARISH') bearishSignals += 1;
-    if (smc.premiumDiscount === 'DISCOUNT') bullishSignals += 1;
-    if (smc.premiumDiscount === 'PREMIUM') bearishSignals += 1;
+    // === MOMENTUM INDICATORS (Weight: 3x) ===
+    // MACD Analysis - Primary momentum indicator
+    const macdStrength = Math.abs(technicals.macd.histogram);
+    if (technicals.macd.histogram > 0) {
+      bullishScore += 3 * (1 + Math.min(macdStrength / 0.5, 1)); // Extra weight for strong MACD
+      signals.push({ factor: 'MACD Histogram', weight: 3, direction: 'BULL' });
+    } else {
+      bearishScore += 3 * (1 + Math.min(macdStrength / 0.5, 1));
+      signals.push({ factor: 'MACD Histogram', weight: 3, direction: 'BEAR' });
+    }
     
-    // Price action weight
-    if ((asset?.change || 0) > 0) bullishSignals += 1; else bearishSignals += 1;
+    // RSI Analysis - Oversold/Overbought zones
+    if (technicals.rsi < 30) {
+      bullishScore += 4; // Strong buy signal in oversold
+      signals.push({ factor: 'RSI Oversold (<30)', weight: 4, direction: 'BULL' });
+    } else if (technicals.rsi > 70) {
+      bearishScore += 4; // Strong sell signal in overbought
+      signals.push({ factor: 'RSI Overbought (>70)', weight: 4, direction: 'BEAR' });
+    } else if (technicals.rsi < 45) {
+      bullishScore += 1;
+      signals.push({ factor: 'RSI Neutral-Low', weight: 1, direction: 'BULL' });
+    } else if (technicals.rsi > 55) {
+      bearishScore += 1;
+      signals.push({ factor: 'RSI Neutral-High', weight: 1, direction: 'BEAR' });
+    }
     
-    const finalBullish = bullishSignals > bearishSignals;
-    const strength = Math.abs(bullishSignals - bearishSignals);
+    // Stochastic - Momentum confirmation
+    if (technicals.stochastic.signal === 'OVERSOLD') {
+      bullishScore += 2;
+      signals.push({ factor: 'Stochastic Oversold', weight: 2, direction: 'BULL' });
+    } else if (technicals.stochastic.signal === 'OVERBOUGHT') {
+      bearishScore += 2;
+      signals.push({ factor: 'Stochastic Overbought', weight: 2, direction: 'BEAR' });
+    }
+    
+    // === TREND INDICATORS (Weight: 2x) ===
+    // Ichimoku Cloud - Comprehensive trend
+    if (technicals.ichimoku.signal === 'BULLISH') {
+      bullishScore += 3;
+      signals.push({ factor: 'Ichimoku Bullish', weight: 3, direction: 'BULL' });
+    } else if (technicals.ichimoku.signal === 'BEARISH') {
+      bearishScore += 3;
+      signals.push({ factor: 'Ichimoku Bearish', weight: 3, direction: 'BEAR' });
+    }
+    
+    // Moving Average Alignment
+    if (technicals.movingAverages.alignment === 'BULLISH') {
+      bullishScore += 2;
+      signals.push({ factor: 'MA Alignment Bullish', weight: 2, direction: 'BULL' });
+    } else if (technicals.movingAverages.alignment === 'BEARISH') {
+      bearishScore += 2;
+      signals.push({ factor: 'MA Alignment Bearish', weight: 2, direction: 'BEAR' });
+    }
+    
+    // ADX Trend Strength
+    if (technicals.adx.value > 25) {
+      const adxBullish = technicals.adx.direction === 'BULLISH';
+      if (adxBullish) bullishScore += 2; else bearishScore += 2;
+      signals.push({ factor: `ADX Strong (${technicals.adx.value.toFixed(0)})`, weight: 2, direction: adxBullish ? 'BULL' : 'BEAR' });
+    }
+    
+    // === SMART MONEY CONCEPTS (Weight: 3x) ===
+    // Market Structure - Critical for direction
+    if (smc.marketStructure === 'HH/HL') {
+      bullishScore += 4;
+      signals.push({ factor: 'Higher Highs/Higher Lows', weight: 4, direction: 'BULL' });
+    } else if (smc.marketStructure === 'LH/LL') {
+      bearishScore += 4;
+      signals.push({ factor: 'Lower Highs/Lower Lows', weight: 4, direction: 'BEAR' });
+    }
+    
+    // SMC Trend
+    if (smc.trend === 'BULLISH') {
+      bullishScore += 2;
+    } else if (smc.trend === 'BEARISH') {
+      bearishScore += 2;
+    }
+    
+    // Premium/Discount Zones - Key for optimal entries
+    if (smc.premiumDiscount === 'DISCOUNT') {
+      bullishScore += 3; // Good for longs
+      signals.push({ factor: 'Price in Discount Zone', weight: 3, direction: 'BULL' });
+    } else if (smc.premiumDiscount === 'PREMIUM') {
+      bearishScore += 3; // Good for shorts
+      signals.push({ factor: 'Price in Premium Zone', weight: 3, direction: 'BEAR' });
+    }
+    
+    // Order Block Analysis
+    if (smc.orderBlocks.length > 0) {
+      const nearestOB = smc.orderBlocks[0];
+      if (nearestOB.type === 'BULLISH') bullishScore += 2;
+      else bearishScore += 2;
+    }
+    
+    // BOS/CHOCH Structure Breaks (bosChoch is string[])
+    if (smc.bosChoch && smc.bosChoch.length > 0) {
+      const bosChochSignal = smc.bosChoch.join(' ').toUpperCase();
+      if (bosChochSignal.includes('BOS')) {
+        if (bosChochSignal.includes('BULLISH') || smc.trend === 'BULLISH') {
+          bullishScore += 3;
+          signals.push({ factor: 'Break of Structure BULLISH', weight: 3, direction: 'BULL' });
+        } else {
+          bearishScore += 3;
+          signals.push({ factor: 'Break of Structure BEARISH', weight: 3, direction: 'BEAR' });
+        }
+      } else if (bosChochSignal.includes('CHOCH')) {
+        // Change of Character - potential reversal
+        if (bosChochSignal.includes('BULLISH')) {
+          bullishScore += 4;
+          signals.push({ factor: 'Change of Character BULLISH', weight: 4, direction: 'BULL' });
+        } else if (bosChochSignal.includes('BEARISH')) {
+          bearishScore += 4;
+          signals.push({ factor: 'Change of Character BEARISH', weight: 4, direction: 'BEAR' });
+        }
+      }
+    }
+    
+    // === DIVERGENCE DETECTION (Weight: 3x) ===
+    if (technicals.divergence.detected) {
+      if (technicals.divergence.type === 'BULLISH') {
+        bullishScore += 4;
+        signals.push({ factor: 'Bullish Divergence', weight: 4, direction: 'BULL' });
+      } else if (technicals.divergence.type === 'BEARISH') {
+        bearishScore += 4;
+        signals.push({ factor: 'Bearish Divergence', weight: 4, direction: 'BEAR' });
+      }
+    }
+    
+    // === VOLATILITY ANALYSIS ===
+    // Bollinger Band Squeeze
+    if (technicals.bollingerBands.squeeze) {
+      // Squeeze = potential breakout coming
+      signals.push({ factor: 'Bollinger Squeeze (Breakout Coming)', weight: 2, direction: 'NEUTRAL' });
+    }
+    
+    // === PRICE ACTION ===
+    if ((asset?.change || 0) > 0.5) bullishScore += 2;
+    else if ((asset?.change || 0) < -0.5) bearishScore += 2;
+    else if ((asset?.change || 0) > 0) bullishScore += 1;
+    else bearishScore += 1;
+    
+    // === SPIKE ANALYSIS ===
+    if (spike.isSpike && spike.prediction === 'IMMINENT') {
+      signals.push({ factor: 'Spike Activity Detected', weight: 3, direction: 'NEUTRAL' });
+    }
+    
+    // =============== FINAL CALCULATIONS ===============
+    const totalScore = bullishScore + bearishScore;
+    const bullishPercent = totalScore > 0 ? (bullishScore / totalScore) * 100 : 50;
+    const bearishPercent = totalScore > 0 ? (bearishScore / totalScore) * 100 : 50;
+    const finalBullish = bullishScore > bearishScore;
+    const strength = Math.abs(bullishScore - bearishScore);
+    
+    console.log(`📊 ALGO SCORES: Bull=${bullishScore.toFixed(1)} (${bullishPercent.toFixed(0)}%) | Bear=${bearishScore.toFixed(1)} (${bearishPercent.toFixed(0)}%) | Strength=${strength.toFixed(1)}`);
+    
     let sentiment: string;
     
     if (strength >= 5) {
@@ -704,20 +1008,38 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
       sentiment = 'NEUTRAL/RANGING';
     }
 
-    let confidence = 60;
+    // =============== DYNAMIC CONFIDENCE SCORING ===============
+    let confidence = 50; // Base confidence
+    
+    // Signal strength contributes significantly
+    confidence += Math.min(strength * 3, 25); // Up to 25 points for signal alignment
+    
+    // Technical analysis quality
     if (detection.ocrConfidence > 90) confidence += 5;
-    if (pattern.confidence > 70) confidence += 10;
-    if (smc.marketStructure !== 'RANGING') confidence += 8;
-    if (spike.isSpike) confidence += 7;
-    if (technicals.divergence.detected) confidence += 5;
-    if (technicals.adx.value > 25) confidence += 5;
-    if (priceDeviation < 0.5) confidence += 3;
+    if (pattern.confidence > 70) confidence += 8;
+    if (smc.marketStructure !== 'RANGING') confidence += 6;
+    if (technicals.adx.value > 25) confidence += 5; // Strong trend
+    if (technicals.adx.value > 40) confidence += 5; // Very strong trend
+    if (technicals.divergence.detected) confidence += 6; // Divergence is powerful
     
-    // Reduce confidence for conflicting signals
+    // Confluence boosters
+    if (signals.filter(s => s.direction === (finalBullish ? 'BULL' : 'BEAR')).length >= 5) confidence += 8;
+    if (smc.orderBlocks.length > 0 && smc.fairValueGaps.length > 0) confidence += 5; // Multiple SMC factors
+    
+    // Spike detection
+    if (spike.isSpike && spike.severity !== 'LOW') confidence += 5;
+    
+    // Price consistency
+    if (priceDeviation < 0.3) confidence += 4; // Fresh data
+    else if (priceDeviation > 2) confidence -= 10; // Stale data warning
+    
+    // Reduce confidence for weak/conflicting signals
     if (strength < 3) confidence -= 15;
-    if (sentiment.includes('WEAK') || sentiment.includes('NEUTRAL')) confidence -= 10;
+    if (strength < 5) confidence -= 5;
+    if (sentiment.includes('WEAK') || sentiment.includes('NEUTRAL')) confidence -= 12;
+    if (technicals.rsi > 40 && technicals.rsi < 60) confidence -= 5; // RSI in neutral zone
     
-    confidence = Math.min(98, Math.max(30, confidence));
+    confidence = Math.min(98, Math.max(25, confidence));
     
     // Entry signal logic - Enhanced for better accuracy
     let entrySignal = 'NO ENTRY';
@@ -837,31 +1159,86 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
     const minDistance = targetMultiplier * pipValue;
     baseDistance = Math.max(baseDistance, minDistance);
     
-    // Calculate targets with proper risk-reward ratios
-    let tp1, tp2, tp3, sl;
+    // =============== CALCULATE ENTRY ZONE & TARGETS ===============
+    let entryLow, entryHigh, tp1, tp2, tp3, sl;
+    
+    // Entry zone calculation based on SMC and market structure
+    const entryZoneSize = baseDistance * 0.3; // Entry zone is 30% of base distance
     
     if (finalBullish) {
-      // Bullish targets
+      // === BULLISH ENTRY ZONE & TARGETS ===
+      // Entry zone should be at or below current price (buy dips)
+      if (smc.premiumDiscount === 'DISCOUNT') {
+        // Ideal - already in discount, entry around current price
+        entryLow = basePrice - entryZoneSize;
+        entryHigh = basePrice + (entryZoneSize * 0.3);
+      } else {
+        // Wait for pullback to discount
+        entryLow = basePrice - (entryZoneSize * 1.5);
+        entryHigh = basePrice - (entryZoneSize * 0.5);
+      }
+      
+      // Use nearest order block as entry zone if available
+      const bullishOB = smc.orderBlocks.find(ob => ob.type === 'BULLISH');
+      if (bullishOB && bullishOB.price < basePrice) {
+        entryLow = Math.min(entryLow, bullishOB.price * 0.998);
+        entryHigh = Math.max(entryHigh, bullishOB.price * 1.002);
+      }
+      
+      // Take profit targets
       tp1 = basePrice + (baseDistance * 1.0); // Conservative (1R)
       tp2 = basePrice + (baseDistance * 2.0); // Moderate (2R)
       tp3 = basePrice + (baseDistance * 3.5); // Aggressive (3.5R)
-      sl = basePrice - (baseDistance * 0.7); // Tight stop (0.7R risk)
+      sl = entryLow - (baseDistance * 0.5); // Stop below entry zone
       
-      // Use Fibonacci/Support levels if available
-      if (technicals.fibonacci.level !== 'N/A' && smc.orderBlocks.length > 0) {
+      // Enhance with Fibonacci levels
+      if (technicals.fibonacci.level !== 'N/A') {
         const fibDistance = baseDistance * 1.2;
         tp1 = Math.max(tp1, basePrice + fibDistance);
       }
+      
+      // Use resistance levels for targets
+      if (smc.liquidityZones.length > 0) {
+        const resistanceZone = smc.liquidityZones.find((z: any) => z.type === 'RESISTANCE' && z.price > basePrice);
+        if (resistanceZone) tp2 = Math.max(tp2, resistanceZone.price);
+      }
+      
     } else {
-      // Bearish targets
+      // === BEARISH ENTRY ZONE & TARGETS ===
+      // Entry zone should be at or above current price (sell rallies)
+      if (smc.premiumDiscount === 'PREMIUM') {
+        // Ideal - already in premium, entry around current price
+        entryLow = basePrice - (entryZoneSize * 0.3);
+        entryHigh = basePrice + entryZoneSize;
+      } else {
+        // Wait for pullback to premium
+        entryLow = basePrice + (entryZoneSize * 0.5);
+        entryHigh = basePrice + (entryZoneSize * 1.5);
+      }
+      
+      // Use nearest bearish order block
+      const bearishOB = smc.orderBlocks.find(ob => ob.type === 'BEARISH');
+      if (bearishOB && bearishOB.price > basePrice) {
+        entryLow = Math.min(entryLow, bearishOB.price * 0.998);
+        entryHigh = Math.max(entryHigh, bearishOB.price * 1.002);
+      }
+      
+      // Take profit targets
       tp1 = basePrice - (baseDistance * 1.0);
       tp2 = basePrice - (baseDistance * 2.0);
       tp3 = basePrice - (baseDistance * 3.5);
-      sl = basePrice + (baseDistance * 0.7);
+      sl = entryHigh + (baseDistance * 0.5); // Stop above entry zone
       
-      if (technicals.fibonacci.level !== 'N/A' && smc.orderBlocks.length > 0) {
+      // Enhance with Fibonacci levels
+      if (technicals.fibonacci.level !== 'N/A') {
         const fibDistance = baseDistance * 1.2;
         tp1 = Math.min(tp1, basePrice - fibDistance);
+      }
+      
+      // Use support levels for targets
+      if (smc.liquidityZones.length > 0) {
+        const supportZone = smc.liquidityZones.find((z: any) => z.type === 'SUPPORT' && z.price < basePrice);
+        if (supportZone) tp2 = Math.min(tp2, supportZone.price);
       }
     }
     
@@ -878,8 +1255,10 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
       tp3 += extension;
     }
 
-    const riskPips = Math.abs(basePrice - sl) / pipValue;
-    const rewardPips = Math.abs(tp2 - basePrice) / pipValue;
+    // Risk-Reward calculation using entry zone
+    const entryMid = (entryLow + entryHigh) / 2;
+    const riskPips = Math.abs(entryMid - sl) / pipValue;
+    const rewardPips = Math.abs(tp2 - entryMid) / pipValue;
     const rrRatio = riskPips > 0 ? (rewardPips / riskPips).toFixed(1) : '0';
 
     setAnalysisProgress(95);
@@ -904,11 +1283,17 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
       entryReason,
       patterns: detectedPatterns.slice(0, 5),
       targets: [
+        { label: 'Entry Zone', value: `${entryLow.toFixed(2)} - ${entryHigh.toFixed(2)}`, pips: (Math.abs(entryHigh - entryLow) / pipValue).toFixed(1), isEntry: true },
         { label: 'Take Profit 1', value: tp1.toFixed(2), pips: (Math.abs(tp1 - basePrice) / pipValue).toFixed(1) },
         { label: 'Take Profit 2', value: tp2.toFixed(2), pips: (Math.abs(tp2 - basePrice) / pipValue).toFixed(1) },
         { label: 'Take Profit 3', value: tp3.toFixed(2), pips: (Math.abs(tp3 - basePrice) / pipValue).toFixed(1) },
         { label: 'Stop Loss', value: sl.toFixed(2), pips: (Math.abs(basePrice - sl) / pipValue).toFixed(1) }
       ],
+      entryZone: {
+        low: entryLow.toFixed(2),
+        high: entryHigh.toFixed(2),
+        optimal: ((entryLow + entryHigh) / 2).toFixed(2)
+      },
       rrRatio,
       smcAnalysis: {
         structure: smc.marketStructure,
@@ -937,6 +1322,18 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
         confluence: technicals.confluence.toFixed(0),
         signals: technicals.signals.slice(0, 5)
       },
+      algoScore: {
+        bullish: bullishScore.toFixed(1),
+        bearish: bearishScore.toFixed(1),
+        bullishPercent: bullishPercent.toFixed(0),
+        bearishPercent: bearishPercent.toFixed(0),
+        dominantSignals: signals.filter(s => s.direction === (finalBullish ? 'BULL' : 'BEAR')).slice(0, 5)
+      },
+      insights: generateTradingInsights({
+        sentiment, confidence, finalBullish, strength,
+        technicals, smc, spike, entrySignal, entryLow, entryHigh,
+        tp1, tp2, tp3, sl, rrRatio, detection, livePrice, priceDeviation
+      }),
       spikeAlert: spike.isSpike,
       spikeSeverity: spike.severity,
       spikePrediction: spike.prediction,
@@ -1446,17 +1843,91 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
                 <div className="grid grid-cols-1 gap-1.5">
                   {results.targets.map((t: any, i: number) => (
                     <div key={i} className={`flex items-center justify-between p-2.5 rounded-xl border group hover:border-cyan-500/30 transition-colors ${
-                      t.label.includes('Stop') ? 'bg-red-500/5 border-red-500/10' : 'bg-green-500/5 border-green-500/10'
+                      t.label.includes('Stop') ? 'bg-red-500/5 border-red-500/10' : 
+                      t.label.includes('Entry') ? 'bg-cyan-500/10 border-cyan-500/30' :
+                      'bg-green-500/5 border-green-500/10'
                     }`}>
                       <div>
-                        <span className="text-[10px] font-mono text-gray-400 uppercase block">{t.label}</span>
-                        <span className="text-[8px] text-gray-500 font-mono">{t.pips} pips</span>
+                        <span className={`text-[10px] font-mono uppercase block ${
+                          t.label.includes('Entry') ? 'text-cyan-400 font-bold' : 'text-gray-400'
+                        }`}>{t.label}</span>
+                        <span className="text-[8px] text-gray-500 font-mono">{t.pips} pips {t.label.includes('Entry') ? 'range' : ''}</span>
                       </div>
-                      <span className="font-orbitron font-bold text-white text-sm">{t.value}</span>
+                      <span className={`font-orbitron font-bold text-sm ${
+                        t.label.includes('Entry') ? 'text-cyan-400' : 'text-white'
+                      }`}>{t.value}</span>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* Insights & Advice */}
+              {results.insights && (
+                <div className="space-y-2 pt-3 border-t border-white/5">
+                  <h4 className="font-orbitron text-[10px] font-bold text-purple-400 uppercase flex items-center gap-2">
+                    <Sparkles size={12} className="text-purple-500" /> AI Trading Insights
+                  </h4>
+                  <div className="space-y-2">
+                    {results.insights.map((insight: any, i: number) => (
+                      <div key={i} className={`p-3 rounded-xl border ${
+                        insight.type === 'WARNING' ? 'bg-yellow-500/5 border-yellow-500/20' :
+                        insight.type === 'OPPORTUNITY' ? 'bg-green-500/5 border-green-500/20' :
+                        insight.type === 'RISK' ? 'bg-red-500/5 border-red-500/20' :
+                        'bg-purple-500/5 border-purple-500/20'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-[8px] font-orbitron font-bold uppercase ${
+                            insight.type === 'WARNING' ? 'text-yellow-400' :
+                            insight.type === 'OPPORTUNITY' ? 'text-green-400' :
+                            insight.type === 'RISK' ? 'text-red-400' :
+                            'text-purple-400'
+                          }`}>{insight.type}</span>
+                        </div>
+                        <p className="text-[11px] font-mono text-gray-300 leading-relaxed">{insight.message}</p>
+                        {insight.action && (
+                          <p className="text-[10px] font-orbitron text-cyan-400 mt-1">→ {insight.action}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Algorithm Score */}
+              {results.algoScore && (
+                <div className="space-y-2 pt-3 border-t border-white/5">
+                  <h4 className="font-orbitron text-[10px] font-bold text-blue-400 uppercase flex items-center gap-2">
+                    <BarChart2 size={12} className="text-blue-500" /> Algorithm Score
+                  </h4>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex-1 h-3 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-green-500 to-green-400 transition-all"
+                        style={{ width: `${results.algoScore.bullishPercent}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-mono text-green-400 w-12">BULL {results.algoScore.bullishPercent}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-3 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-red-500 to-red-400 transition-all"
+                        style={{ width: `${results.algoScore.bearishPercent}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-mono text-red-400 w-12">BEAR {results.algoScore.bearishPercent}%</span>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {results.algoScore.dominantSignals?.map((sig: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 text-[9px] font-mono">
+                        <span className={sig.direction === 'BULL' ? 'text-green-400' : 'text-red-400'}>●</span>
+                        <span className="text-gray-400">{sig.factor}</span>
+                        <span className="text-gray-500 ml-auto">+{sig.weight}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Commentary */}
               <div className="bg-cyan-500/5 rounded-xl p-4 border border-cyan-500/20 relative overflow-hidden">
