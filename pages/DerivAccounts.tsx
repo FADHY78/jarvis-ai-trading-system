@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CreditCard, Shield, Plus, RefreshCw, Layers, Search, Globe, Filter, Activity, Cpu, ExternalLink } from 'lucide-react';
 import { derivService, DerivAccount, DerivSymbol } from '../services/derivService';
-import { PriceData } from '../types';
+import { PriceData, resolvePriceData } from '../types';
 
 interface DerivAccountsProps {
   accounts: DerivAccount[];
@@ -157,8 +157,8 @@ const DerivAccounts: React.FC<DerivAccountsProps> = ({ accounts, activeAccount, 
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
               {filteredSymbols.map(s => {
-                // Fix: Explicitly cast Object.values(prices) to PriceData[] to resolve 'unknown' property access error on 'p' in .find()
-                const livePrice = prices[s.symbol] || (Object.values(prices) as PriceData[]).find(p => p.symbol === s.symbol);
+                // Use universal symbol resolver for accurate price data
+                const livePrice = resolvePriceData(s.symbol, prices) || (Object.values(prices) as PriceData[]).find(p => p.symbol === s.symbol);
                 
                 return (
                   <div key={s.symbol} className="glass p-4 rounded-2xl border border-white/5 hover:border-cyan-500/40 group transition-all duration-300 cursor-pointer hover:bg-cyan-500/[0.02]">

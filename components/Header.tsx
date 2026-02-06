@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Search, User, Globe, ChevronDown, Mic, Volume2, Sparkles, Menu, Cpu } from 'lucide-react';
+import { Bell, Search, User, Globe, ChevronDown, Mic, Volume2, Sparkles, Menu, Cpu, Wifi, WifiOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DerivAccount } from '../services/derivService';
 import { speakJarvis } from '../services/voiceService';
+import { PriceData } from '../types';
 
 interface HeaderProps {
   activeAccount: DerivAccount | null;
@@ -11,12 +12,16 @@ interface HeaderProps {
   onAccountSwitch: (acc: DerivAccount) => void;
   onInitiateVoice: () => void;
   onMenuToggle?: () => void;
+  prices: Record<string, PriceData>;
 }
 
-const Header: React.FC<HeaderProps> = ({ activeAccount, accounts, onAccountSwitch, onInitiateVoice, onMenuToggle }) => {
+const Header: React.FC<HeaderProps> = ({ activeAccount, accounts, onAccountSwitch, onInitiateVoice, onMenuToggle, prices }) => {
   const [time, setTime] = useState(new Date());
   const [showAccountList, setShowAccountList] = useState(false);
   const navigate = useNavigate();
+
+  const isConnected = Object.keys(prices).length > 0;
+  const assetCount = Object.keys(prices).filter(s => !s.startsWith('frx') && !s.startsWith('cry')).length;
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -44,6 +49,21 @@ const Header: React.FC<HeaderProps> = ({ activeAccount, accounts, onAccountSwitc
           <span className="hidden sm:inline">JARVIS AI TRADING SYSTEM</span>
           <span className="sm:hidden">JARVIS</span>
         </h1>
+        
+        {/* Market Data Connection Indicator */}
+        <div className={`flex items-center gap-1 px-2 py-1 rounded border text-[8px] font-mono uppercase tracking-wide ${
+          isConnected 
+            ? 'bg-green-500/10 border-green-500/30 text-green-400' 
+            : 'bg-red-500/10 border-red-500/30 text-red-400 animate-pulse'
+        }`}>
+          {isConnected ? <Wifi size={10} /> : <WifiOff size={10} />}
+          <span className="hidden lg:inline">
+            {isConnected ? `LIVE • ${assetCount} ASSETS` : 'CONNECTING...'}
+          </span>
+          <span className="lg:hidden">
+            {isConnected ? assetCount : '...'}
+          </span>
+        </div>
         
         <div className="relative">
           <button 

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Brain, TrendingUp, TrendingDown, Target, AlertTriangle, Activity, Zap, Shield, Eye, BarChart3, Sparkles, ChevronDown, ChevronUp, Layers, TrendingUpDown, Search, Clock, Radar } from 'lucide-react';
-import { PriceData } from '../types';
+import { PriceData, resolvePriceData } from '../types';
 import { detectPatterns, detectManipulation, calculateTechnicalStrength, detectSMC, detectAdvancedSpikes } from '../services/mockDataService';
 
 interface AIAnalysisProps {
@@ -15,7 +15,7 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ prices }) => {
     const targetPairs = ['frxEURUSD', 'frxGBPUSD', 'frxUSDJPY', 'frxXAUUSD', 'cryBTCUSD', 'R_100', 'R_75', 'R_50', 'BOOM500', 'BOOM1000', 'CRASH500', 'CRASH1000', '1HZ100V'];
     
     return targetPairs.map((pair, idx) => {
-      const priceData = prices[pair];
+      const priceData = resolvePriceData(pair, prices);
       if (!priceData) return null;
 
       const currentPrice = priceData.price || 0;

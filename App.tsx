@@ -7,7 +7,6 @@ import Header from './components/Header';
 import JarvisVocalInterface from './components/JarvisVocalInterface';
 import Toast from './components/Toast';
 import { PriceData, Position } from './types';
-import { initialPriceData, generatePriceUpdate } from './services/mockDataService';
 import { derivService, DerivAccount, DerivTick } from './services/derivService';
 import { testTelegramBot } from './services/telegramService';
 
@@ -37,7 +36,7 @@ const PageLoader = () => (
 );
 
 const App: React.FC = () => {
-  const [prices, setPrices] = useState<Record<string, PriceData>>(initialPriceData);
+  const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const [positions, setPositions] = useState<Position[]>([
     { id: '1', pair: 'EURUSD', type: 'LONG', entry: 1.0850, current: 1.0892, pnl: 156.40, pnlPercent: 0.38, status: 'PROFIT' },
     { id: '2', pair: 'GOLD', type: 'SHORT', entry: 2045.0, current: 2038.2, pnl: 68.00, pnlPercent: 0.33, status: 'PROFIT' },
@@ -188,17 +187,8 @@ const App: React.FC = () => {
 
     initializeDeriv();
 
-    const interval = setInterval(() => {
-      setPrices(prev => {
-        const next = { ...prev };
-        if (next['NAS100']) {
-          next['NAS100'] = generatePriceUpdate(next['NAS100']);
-        }
-        return next;
-      });
-    }, 2000);
-
-    return () => clearInterval(interval);
+    // No mock data generation - all prices come from real Deriv API
+    console.log('🚀 JARVIS: All market data sourced from live Deriv API');
   }, []);
 
   return (
@@ -213,6 +203,7 @@ const App: React.FC = () => {
             onAccountSwitch={setActiveAccount} 
             onInitiateVoice={() => setIsVocalInterfaceOpen(true)}
             onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+            prices={prices}
           />
           
           <div className="flex-1 overflow-y-auto p-3 lg:p-6 custom-scrollbar">

@@ -33,7 +33,7 @@ const LiveCharts: React.FC<LiveChartsProps> = ({ prices }) => {
               <ChevronDown size={14} className="text-gray-500" />
             </button>
             <div className="absolute top-full left-0 mt-2 w-48 glass rounded-lg border-cyan-500/20 hidden group-hover:block z-50 overflow-hidden">
-               {Object.keys(prices).map(s => (
+               {Object.keys(prices).length > 0 ? Object.keys(prices).map(s => (
                  <button 
                   key={s} 
                   onClick={() => setActiveSymbol(s.includes('frx') ? `FX:${s.replace('frx','')}` : `DERIV:${s}`)}
@@ -41,7 +41,9 @@ const LiveCharts: React.FC<LiveChartsProps> = ({ prices }) => {
                 >
                    {s}
                  </button>
-               ))}
+               )) : (
+                 <div className="px-4 py-2 text-xs text-gray-500">Loading market data...</div>
+               )}
             </div>
           </div>
           <div className="h-6 w-px bg-white/10"></div>

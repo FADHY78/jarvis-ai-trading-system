@@ -2,7 +2,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload, Image as ImageIcon, Search, Crosshair, AlertCircle, Cpu, Brain, Sparkles, RefreshCw, TrendingUp, TrendingDown, Activity, Zap, Eye, Clock, DollarSign, BarChart2, Camera, CameraOff, Square } from 'lucide-react';
 import { speakJarvis } from '../services/voiceService';
-import { PriceData } from '../types';
+import { PriceData, resolvePriceData } from '../types';
 import { detectPatterns, detectSMC, detectAdvancedSpikes, calculateAdvancedTechnicals } from '../services/mockDataService';
 
 interface MarketLensProps {
@@ -489,7 +489,7 @@ function simulateImageOCR(imageSrc: string, availablePrices: Record<string, Pric
   }
 
   // Fallback to safe symbols if detection fails
-  if (!safePrices[detectedSymbol]) {
+  if (!resolvePriceData(detectedSymbol, safePrices)) {
     const availableSymbols = Object.keys(safePrices).filter(s => 
       !s.startsWith('frx') && !s.startsWith('cry') && !s.startsWith('1HZ')
     );
@@ -504,7 +504,7 @@ function simulateImageOCR(imageSrc: string, availablePrices: Record<string, Pric
     priceRange: [100, 5000] as [number, number] 
   };
 
-  const liveAsset = safePrices[detectedSymbol];
+  const liveAsset = resolvePriceData(detectedSymbol, safePrices);
   const priceFromImage = liveAsset ? liveAsset.price : (meta.priceRange[0] + meta.priceRange[1]) / 2;
 
   // Smart timeframe detection based on image characteristics
@@ -586,8 +586,8 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
         setResults(null);
         setShowSymbolSelector(true);
         
-        // Smart default: Use XAUUSD if available, or first available symbol
-        const defaultSymbol = prices['XAUUSD'] ? 'XAUUSD' : Object.keys(prices).filter(s => !s.startsWith('frx') && !s.startsWith('cry') && !s.startsWith('1HZ'))[0];
+        // Smart default: Use GOLD/XAUUSD if available, or first available symbol
+        const defaultSymbol = resolvePriceData('XAUUSD', prices) ? 'XAUUSD' : Object.keys(prices).filter(s => !s.startsWith('frx') && !s.startsWith('cry') && !s.startsWith('1HZ'))[0] || 'XAUUSD';
         setSelectedSymbol(defaultSymbol);
         
         speakJarvis("Chart uploaded. Please confirm the symbol before analysis.", 'sophisticated');
@@ -680,8 +680,8 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
         // Stop camera after capture
         stopCamera();
         
-        // Smart default: Use XAUUSD if available, or first available symbol
-        const defaultSymbol = prices['XAUUSD'] ? 'XAUUSD' : Object.keys(prices).filter(s => !s.startsWith('frx') && !s.startsWith('cry') && !s.startsWith('1HZ'))[0];
+        // Smart default: Use GOLD/XAUUSD if available, or first available symbol
+        const defaultSymbol = resolvePriceData('XAUUSD', prices) ? 'XAUUSD' : Object.keys(prices).filter(s => !s.startsWith('frx') && !s.startsWith('cry') && !s.startsWith('1HZ'))[0] || 'XAUUSD';
         setSelectedSymbol(defaultSymbol);
         
         speakJarvis("Chart captured successfully. Please confirm the symbol.", 'sophisticated');
@@ -761,7 +761,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
         priceRange: [100, 5000] as [number, number] 
       };
       
-      const liveAsset = prices[forcedSymbol];
+      const liveAsset = resolvePriceData(forcedSymbol, prices);
       const fallbackPrice = liveAsset ? liveAsset.price : (meta.priceRange[0] + meta.priceRange[1]) / 2;
       
       const detection: ImageDetection = {
@@ -796,7 +796,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
     await new Promise(r => setTimeout(r, 500));
     
     // Get REAL-TIME LIVE PRICE from current market feed (refreshed data)
-    const asset = prices[detection.symbol];
+    const asset = resolvePriceData(detection.symbol, prices);
     const realTimeLivePrice = asset ? asset.price : detection.priceFromImage;
     const livePrice = asset ? asset.price : realTimeLivePrice; // Always use the freshest market price
     
@@ -1375,7 +1375,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
           <h3 className="font-orbitron text-xs font-bold text-cyan-400 uppercase flex items-center gap-2">
             <Activity size={14} className="animate-pulse" /> Live Market Feed
           </h3>
-          <span className="text-[8px] font-mono text-gray-500">SYNCED • {Object.keys(prices).filter(s => !s.startsWith('frx') && !s.startsWith('cry')).length} ASSETS</span>
+          <span className="text-[8px] font-mono text-gray-500">LIVE FEED • {Object.keys(prices).filter(s => !s.startsWith('frx') && !s.startsWith('cry')).length} ASSETS</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
           {Object.entries(prices).filter(([s]) => !s.startsWith('frx') && !s.startsWith('cry') && !s.startsWith('1HZ')).slice(0, 7).map(([symbol, value]) => {
@@ -1464,7 +1464,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
                         <span className="text-[9px] font-mono text-green-400">{results.symbol} • {results.timeframe.split(' / ')[0]}</span>
                       </div>
                       <div className="absolute top-3 right-3 bg-black/80 px-3 py-1.5 rounded border border-cyan-500/50">
-                        <span className="text-[9px] font-mono text-cyan-400">LIVE: {results.livePrice}</span>
+                        <span className="text-[9px] font-mono text-cyan-400">LIVE: {(resolvePriceData(results.symbol, prices)?.price.toFixed(2) || results.livePrice)}</span>
                       </div>
                       <div className="absolute left-0 right-0 top-[25%] border-t border-dashed border-green-500/30"></div>
                       <div className="absolute left-0 right-0 top-[75%] border-t border-dashed border-red-500/30"></div>
@@ -1538,7 +1538,8 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
               </div>
               
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-64 overflow-y-auto">
-                {Object.keys(prices)
+                {Object.keys(prices).length > 0 ? 
+                  Object.keys(prices)
                   .filter(s => !s.startsWith('frx') && !s.startsWith('cry') && !s.startsWith('1HZ'))
                   .map(symbol => {
                     const asset = prices[symbol] as PriceData;
@@ -1565,7 +1566,17 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
                         </div>
                       </button>
                     );
-                  })}
+                  }) : (
+                    <div className="col-span-full grid grid-cols-2 gap-2">
+                      {['Loading...', 'Connecting...', 'Please Wait...', 'Syncing...'].map((text, i) => (
+                        <div key={i} className="p-3 rounded-xl border border-white/10 bg-black/30 animate-pulse">
+                          <div className="h-4 bg-white/10 rounded mb-2"></div>
+                          <div className="h-3 bg-white/5 rounded mb-1"></div>
+                          <div className="h-2 bg-white/5 rounded w-2/3"></div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
               </div>
 
               <button
@@ -1605,7 +1616,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
                 </div>
                 <div className="bg-cyan-500/10 rounded-lg p-2 border border-cyan-500/20">
                   <span className="text-cyan-500 text-[9px]">LIVE PRICE</span>
-                  <p className="text-cyan-400 font-bold">{results.livePrice}</p>
+                  <p className="text-cyan-400 font-bold">{(resolvePriceData(results.symbol, prices)?.price.toFixed(2) || results.livePrice)}</p>
                   <span className="text-cyan-500/60 text-[7px]">Real-Time</span>
                 </div>
                 <div className="bg-black/30 rounded-lg p-2 border border-white/5">
@@ -1760,7 +1771,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
                   <p className="text-[8px] font-mono text-cyan-500 uppercase mb-0.5 flex items-center gap-1">
                     <Activity size={8} /> Live Price
                   </p>
-                  <p className="text-base font-orbitron font-black text-cyan-400">{results.livePrice}</p>
+                  <p className="text-base font-orbitron font-black text-cyan-400">{(resolvePriceData(results.symbol, prices)?.price.toFixed(2) || results.livePrice)}</p>
                   <p className="text-[7px] font-mono text-cyan-500/60 mt-0.5">Real-Time Feed</p>
                 </div>
                 <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
