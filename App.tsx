@@ -24,6 +24,7 @@ const JarvisChat = lazy(() => import('./pages/JarvisChat'));
 const DerivAccounts = lazy(() => import('./pages/DerivAccounts'));
 const Profile = lazy(() => import('./pages/Profile'));
 const JarvisControlCenter = lazy(() => import('./pages/JarvisControlCenter'));
+const MarketLens = lazy(() => import('./pages/MarketLens'));
 
 // Loading component
 const PageLoader = () => (
@@ -223,12 +224,13 @@ const App: React.FC = () => {
                 <Route path="/scanner" element={<MarketScanner prices={prices} />} />
                 <Route path="/signals" element={<AISignals prices={prices} />} />
                 <Route path="/analysis" element={<AIAnalysis prices={prices} />} />
+                <Route path="/lens" element={<MarketLens />} />
                 <Route path="/portfolio" element={<Portfolio positions={positions} />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/profile" element={<Profile activeAccount={activeAccount} accounts={derivAccounts} onAccountSwitch={setActiveAccount} />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/jarvis" element={<JarvisChat />} />
-                <Route path="/control" element={<JarvisControlCenter prices={prices} />} />
+                <Route path="/control" element={<JarvisControlCenter prices={prices} onInitiateVoice={() => setIsVocalInterfaceOpen(true)} />} />
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             </Suspense>

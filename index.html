@@ -76,6 +76,15 @@
       to { transform: rotate(360deg); }
     }
 
+    @keyframes scanline {
+      0% { top: 0%; }
+      100% { top: 100%; }
+    }
+
+    .animate-scanline {
+      animation: scanline 3s linear infinite;
+    }
+
     .animate-pulse-border {
       animation: pulse-border 2s infinite ease-in-out;
     }

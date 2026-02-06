@@ -106,16 +106,6 @@ const Header: React.FC<HeaderProps> = ({ activeAccount, accounts, onAccountSwitc
           <span className="lg:hidden">CONTROL</span>
         </button>
 
-        {/* New Initiate Voice System Button */}
-        <button 
-          onClick={onInitiateVoice}
-          className="hidden sm:flex items-center gap-2 px-3 lg:px-4 py-1.5 bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border border-cyan-500/50 rounded-full text-cyan-400 font-orbitron text-[9px] lg:text-[10px] tracking-widest hover:from-cyan-500/30 hover:to-blue-500/30 transition-all neon-glow group"
-        >
-          <Sparkles size={12} className="group-hover:rotate-12 transition-transform" />
-          <span className="hidden lg:inline">INITIATE JARVIS</span>
-          <span className="lg:hidden">JARVIS</span>
-        </button>
-
         <button 
           onClick={triggerVocalStatus}
           className="p-2 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500 hover:text-black transition-all group relative"

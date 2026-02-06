@@ -19,16 +19,27 @@ const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // Store latest signals for MT5 EA
 let latestSignals = [
-  // Demo signal for testing MT5 EA - will be replaced by real signals
+  // Demo signals for testing MT5 EA - will be replaced by real signals
   {
     pair: 'XAU/USD',
     type: 'LONG',
-    confidence: 92,
+    confidence: 88,
     entry: 2650.50,
-    sl: 2645.00,
-    tp1: 2658.75,
-    tp2: 2663.25,
-    tp3: 2672.50,
+    sl: 2640.00,
+    tp1: 2666.25,
+    tp2: 2676.75,
+    tp3: 2692.50,
+    timestamp: new Date().toISOString()
+  },
+  {
+    pair: 'EUR/USD',
+    type: 'LONG',
+    confidence: 85,
+    entry: 1.0850,
+    sl: 1.0820,
+    tp1: 1.0895,
+    tp2: 1.0925,
+    tp3: 1.0970,
     timestamp: new Date().toISOString()
   }
 ];
@@ -498,6 +509,100 @@ app.post('/api/signals/update', (req, res) => {
     console.log(`📊 Updated ${latestSignals.length} signals for MT5 EA`);
     
     res.json({ success: true, count: latestSignals.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Quick signal update endpoint for fast signal changes
+app.post('/api/signals/quick', (req, res) => {
+  try {
+    const { pair, type, confidence, entry, sl } = req.body;
+    
+    if (!pair || !type) {
+      return res.json({ success: false, message: 'Missing pair or type' });
+    }
+    
+    // Calculate TP levels
+    const riskAmount = Math.abs(entry - sl);
+    
+    const newSignal = {
+      pair,
+      type: type.toUpperCase(),
+      confidence: confidence || 85,
+      entry: entry || 0,
+      sl: sl || 0,
+      tp1: type === 'LONG' ? entry + (riskAmount * 1.5) : entry - (riskAmount * 1.5),
+      tp2: type === 'LONG' ? entry + (riskAmount * 2.5) : entry - (riskAmount * 2.5),
+      tp3: type === 'LONG' ? entry + (riskAmount * 4.0) : entry - (riskAmount * 4.0),
+      timestamp: new Date().toISOString()
+    };
+    
+    // Update or add signal
+    const existingIndex = latestSignals.findIndex(s => s.pair === pair);
+    if (existingIndex >= 0) {
+      latestSignals[existingIndex] = newSignal;
+    } else {
+      latestSignals.push(newSignal);
+    }
+    
+    console.log(`⚡ QUICK SIGNAL: ${pair} ${type} (${confidence}%)`);
+    
+    res.json({ success: true, signal: newSignal });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get signal for specific pair (for multi-symbol trading)
+app.get('/api/signals/:pair', (req, res) => {
+  try {
+    const pair = req.params.pair.toUpperCase().replace('/', '');
+    
+    const signal = latestSignals.find(s => 
+      s.pair.replace('/', '').toUpperCase() === pair
+    );
+    
+    if (!signal) {
+      return res.json({
+        success: false,
+        message: `No signal for ${pair}`
+      });
+    }
+    
+    res.json({ success: true, signal });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all active signals
+app.get('/api/signals/all', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      count: latestSignals.length,
+      signals: latestSignals
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Clear signal (when trade is closed or signal expires)
+app.delete('/api/signals/:pair', (req, res) => {
+  try {
+    const pair = req.params.pair.toUpperCase().replace('/', '');
+    
+    const initialCount = latestSignals.length;
+    latestSignals = latestSignals.filter(s => 
+      s.pair.replace('/', '').toUpperCase() !== pair
+    );
+    
+    const removed = initialCount - latestSignals.length;
+    console.log(`🗑️ Cleared ${removed} signal(s) for ${pair}`);
+    
+    res.json({ success: true, removed });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

@@ -7,9 +7,10 @@ import { speakJarvis } from '../services/voiceService';
 
 interface JarvisControlCenterProps {
   prices: Record<string, PriceData>;
+  onInitiateVoice: () => void;
 }
 
-const JarvisControlCenter: React.FC<JarvisControlCenterProps> = ({ prices }) => {
+const JarvisControlCenter: React.FC<JarvisControlCenterProps> = ({ prices, onInitiateVoice }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [deepScanActive, setDeepScanActive] = useState(false);
@@ -130,6 +131,14 @@ const JarvisControlCenter: React.FC<JarvisControlCenterProps> = ({ prices }) => 
             <span className="lg:hidden">AI CONTROL • V12.0</span>
           </p>
         </div>
+
+        <button 
+          onClick={onInitiateVoice}
+          className="flex items-center gap-3 px-6 py-2.5 bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border-2 border-cyan-500/50 rounded-full text-cyan-400 font-orbitron text-[10px] lg:text-xs tracking-[0.2em] hover:from-cyan-500/30 hover:to-blue-500/30 transition-all neon-glow group uppercase font-black"
+        >
+          <Sparkles size={16} className="group-hover:rotate-12 transition-transform" />
+          <span>Initiate Jarvis</span>
+        </button>
       </div>
 
       {/* Control Panel */}

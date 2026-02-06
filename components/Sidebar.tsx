@@ -15,7 +15,8 @@ import {
   X,
   User,
   Cpu,
-  Activity
+  Activity,
+  Crosshair
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -31,6 +32,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
     { to: '/scanner', icon: <Radar size={20} />, label: 'Scanner' },
     { to: '/signals', icon: <Brain size={20} />, label: 'AI Signals' },
     { to: '/analysis', icon: <Activity size={20} />, label: 'AI Analysis' },
+    { to: '/lens', icon: <Crosshair size={20} />, label: 'Market Lens' },
     { to: '/portfolio', icon: <Wallet size={20} />, label: 'Portfolio' },
     { to: '/analytics', icon: <BarChart2 size={20} />, label: 'Analytics' },
     { to: '/profile', icon: <User size={20} />, label: 'Profile' },
