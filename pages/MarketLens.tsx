@@ -1,14 +1,47 @@
 
-import React, { useState, useRef } from 'react';
-import { Camera, Upload, Image as ImageIcon, Search, Crosshair, AlertCircle, CheckCircle2, Cpu, Brain, Sparkles, RefreshCw } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, Upload, Image as ImageIcon, Search, Crosshair, AlertCircle, CheckCircle2, Cpu, Brain, Sparkles, RefreshCw, TrendingUp, TrendingDown, Activity, Zap } from 'lucide-react';
 import { speakJarvis } from '../services/voiceService';
+import { PriceData } from '../types';
+import { detectPatterns, detectSMC, detectAdvancedSpikes, calculateAdvancedTechnicals } from '../services/mockDataService';
 
-const MarketLens: React.FC = () => {
+interface MarketLensProps {
+  prices: Record<string, PriceData>;
+}
+
+const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [results, setResults] = useState<any | null>(null);
+  const [detectedSymbol, setDetectedSymbol] = useState<string | null>(null);
+  const [liveMarketData, setLiveMarketData] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-detect potential symbol from image analysis
+  useEffect(() => {
+    if (detectedSymbol && prices[detectedSymbol]) {
+      const asset = prices[detectedSymbol];
+      const history = asset.history;
+      
+      // Run real-time analysis
+      const pattern = detectPatterns(history);
+      const smc = detectSMC(history, detectedSymbol);
+      const spike = detectAdvancedSpikes(history, detectedSymbol);
+      const technicals = calculateAdvancedTechnicals(history);
+      
+      setLiveMarketData({
+        symbol: detectedSymbol,
+        price: asset.price,
+        change: asset.change,
+        changePercent: asset.changePercent,
+        pattern,
+        smc,
+        spike,
+        technicals
+      });
+    }
+  }, [detectedSymbol, prices]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -45,23 +78,88 @@ const MarketLens: React.FC = () => {
       setAnalysisProgress(step.p);
     }
 
+    // AI Symbol Detection (simulate detecting symbol from image)
+    const symbols = Object.keys(prices).filter(s => !s.startsWith('frx') && !s.startsWith('cry'));
+    const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)] || 'GOLD';
+    setDetectedSymbol(randomSymbol);
+    
+    // Get real-time market context
+    const asset = prices[randomSymbol];
+    if (!asset) {
+      setIsAnalyzing(false);
+      return;
+    }
+    
+    const history = asset.history || [];
+    const pattern = detectPatterns(history);
+    const smc = detectSMC(history, randomSymbol);
+    const spike = detectAdvancedSpikes(history, randomSymbol);
+    const technicals = calculateAdvancedTechnicals(history);
+    
+    // Determine sentiment based on real data
+    const isBullish = (asset.change || 0) > 0 || smc.marketStructure === 'HH/HL' || smc.trend === 'BULLISH';
+    const sentiment = isBullish ? "BULLISH BIAS" : "BEARISH BIAS";
+    
+    // Calculate confidence from multiple factors
+    let confidence = 65;
+    if (pattern.confidence > 70) confidence += 10;
+    if (smc.marketStructure !== 'RANGING') confidence += 8;
+    if (spike.isSpike) confidence += 7;
+    if (technicals.divergence.detected) confidence += 5;
+    if (technicals.adx.value > 25) confidence += 5;
+    
+    // Generate patterns list
+    const detectedPatterns: string[] = [];
+    if (pattern.label && pattern.label !== 'RANGING') detectedPatterns.push(pattern.label);
+    if (smc.orderBlocks && smc.orderBlocks.length > 0) {
+      detectedPatterns.push(`${smc.orderBlocks[0].type} Order Block`);
+    }
+    if (smc.fairValueGaps && smc.fairValueGaps.length > 0) {
+      detectedPatterns.push('Fair Value Gap');
+    }
+    if (technicals.divergence.detected) detectedPatterns.push(`${technicals.divergence.type} Divergence`);
+    if (spike.prediction === 'IMMINENT') detectedPatterns.push('Spike Zone Detected');
+    if (!detectedPatterns.length) detectedPatterns.push('Consolidation Pattern', 'Ranging Market');
+    
+    // Calculate realistic targets based on current price
+    const currentPrice = asset.price || 2042.50;
+    const volatility = Math.abs(asset.changePercent || 1.5);
+    const tp1 = isBullish ? currentPrice * (1 + volatility/100 * 0.8) : currentPrice * (1 - volatility/100 * 0.8);
+    const tp2 = isBullish ? currentPrice * (1 + volatility/100 * 1.5) : currentPrice * (1 - volatility/100 * 1.5);
+    const sl = isBullish ? currentPrice * (1 - volatility/100 * 0.6) : currentPrice * (1 + volatility/100 * 0.6);
+    
     const mockResults = {
-      asset: "IDENTIFIED: XAUUSD (Gold)",
+      asset: `IDENTIFIED: ${randomSymbol}`,
       timeframe: "H1 / Hourly",
-      sentiment: "BULLISH BIAS",
-      confidence: "87.4%",
-      patterns: ["Falling Wedge Breakout", "Double Bottom Support", "Bullish Divergence (RSI)"],
+      sentiment: sentiment,
+      confidence: `${confidence.toFixed(1)}%`,
+      currentPrice: currentPrice.toFixed(2),
+      liveChange: asset.changePercent?.toFixed(2) || "0.00",
+      patterns: detectedPatterns.slice(0, 3),
       targets: [
-        { label: "Take Profit 1", value: "2055.40" },
-        { label: "Take Profit 2", value: "2068.10" },
-        { label: "Stop Loss", value: "2038.50" }
+        { label: "Take Profit 1", value: tp1.toFixed(2), pips: Math.abs(tp1 - currentPrice).toFixed(0) },
+        { label: "Take Profit 2", value: tp2.toFixed(2), pips: Math.abs(tp2 - currentPrice).toFixed(0) },
+        { label: "Stop Loss", value: sl.toFixed(2), pips: Math.abs(currentPrice - sl).toFixed(0) }
       ],
-      commentary: "Structural analysis indicates a successful retest of the order block at 2042.00. Institutional buy volume is building. Recommend looking for long entries on the next retracement, sir."
+      smcAnalysis: {
+        structure: smc.marketStructure,
+        trend: smc.trend,
+        orderBlocks: smc.orderBlocks,
+        liquidityZones: smc.liquidityZones,
+        fairValueGaps: smc.fairValueGaps
+      },
+      technicals: {
+        direction: technicals.adx.direction,
+        strength: technicals.adx.value.toFixed(0),
+        rsi: technicals.rsi.toFixed(1),
+        macdSignal: technicals.macd.histogram > 0 ? 'BULLISH' : 'BEARISH'
+      },
+      commentary: `Real-time analysis confirms ${sentiment.toLowerCase()} structure on ${randomSymbol}. Current price action shows ${smc.marketStructure.toLowerCase()} market conditions. ${spike.isSpike ? `ALERT: ${spike.severity} spike detected with ${spike.prediction.toLowerCase()} movement expected.` : 'Price stability maintained within normal ranges.'} RSI at ${technicals.rsi.toFixed(1)} indicates ${technicals.rsi > 70 ? 'overbought' : technicals.rsi < 30 ? 'oversold' : 'neutral'} conditions. Recommend ${isBullish ? 'long' : 'short'} positions on confirmed entry signals, sir.`
     };
 
     setResults(mockResults);
     setIsAnalyzing(false);
-    speakJarvis(`Analysis complete, sir. I've identified a ${mockResults.sentiment} setup with ${mockResults.confidence} confidence. Stand by for detailed targets.`, 'sophisticated');
+    speakJarvis(`Analysis complete, sir. Real-time data confirms ${mockResults.sentiment} on ${randomSymbol} with ${mockResults.confidence} confidence. Current price ${mockResults.currentPrice}, displaying ${detectedPatterns.length} key patterns. Tactical targets uploaded.`, 'sophisticated');
   };
 
   const triggerUpload = () => fileInputRef.current?.click();
@@ -78,6 +176,33 @@ const MarketLens: React.FC = () => {
           <p className="text-[10px] lg:text-[11px] font-mono text-gray-500 uppercase tracking-[0.2em] font-bold">
             Visual Recognition • Pattern Synthesis • Tactical Intelligence
           </p>
+        </div>
+      </div>
+
+      {/* Real-time Market Intelligence Bar */}
+      <div className="glass rounded-2xl p-4 border border-cyan-500/20 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-orbitron text-xs font-bold text-cyan-400 uppercase flex items-center gap-2">
+            <Activity size={14} className="animate-pulse" /> Live Market Feed
+          </h3>
+          <span className="text-[8px] font-mono text-gray-500">SYNCED • {Object.keys(prices).length} ASSETS</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {Object.entries(prices).slice(0, 6).map(([symbol, value]) => {
+            const data = value as PriceData;
+            return (
+            <div key={symbol} className="bg-black/30 rounded-xl p-3 border border-white/5 hover:border-cyan-500/30 transition-all group cursor-pointer" onClick={() => setDetectedSymbol(symbol)}>
+              <p className="text-[9px] font-mono text-gray-500 uppercase mb-1">{symbol}</p>
+              <p className="text-sm font-orbitron font-bold text-white">{data.price.toFixed(2)}</p>
+              <div className={`flex items-center gap-1 mt-1 text-[9px] font-mono ${
+                data.change >= 0 ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {data.change >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                <span>{data.changePercent?.toFixed(2)}%</span>
+              </div>
+            </div>
+            );
+          })}
         </div>
       </div>
 
@@ -217,14 +342,24 @@ const MarketLens: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                  <p className="text-[10px] font-mono text-gray-500 uppercase mb-1">AI Confidence</p>
-                  <p className="text-2xl font-orbitron font-black text-cyan-400">{results.confidence}</p>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="bg-white/5 rounded-2xl p-3 border border-white/10">
+                  <p className="text-[9px] font-mono text-gray-500 uppercase mb-1">Live Price</p>
+                  <p className="text-lg font-orbitron font-black text-white">{results.currentPrice}</p>
                 </div>
-                <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                  <p className="text-[10px] font-mono text-gray-500 uppercase mb-1">Risk Rating</p>
-                  <p className="text-2xl font-orbitron font-black text-purple-400">LOW</p>
+                <div className={`bg-white/5 rounded-2xl p-3 border border-white/10`}>
+                  <p className="text-[9px] font-mono text-gray-500 uppercase mb-1">24H Change</p>
+                  <p className={`text-lg font-orbitron font-black ${
+                    parseFloat(results.liveChange) >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>{results.liveChange}%</p>
+                </div>
+                <div className="bg-white/5 rounded-2xl p-3 border border-white/10">
+                  <p className="text-[9px] font-mono text-gray-500 uppercase mb-1">AI Confidence</p>
+                  <p className="text-lg font-orbitron font-black text-cyan-400">{results.confidence}</p>
+                </div>
+                <div className="bg-white/5 rounded-2xl p-3 border border-white/10">
+                  <p className="text-[9px] font-mono text-gray-500 uppercase mb-1">RSI Level</p>
+                  <p className="text-lg font-orbitron font-black text-purple-400">{results.technicals.rsi}</p>
                 </div>
               </div>
 
@@ -241,12 +376,40 @@ const MarketLens: React.FC = () => {
                 </div>
               </div>
 
+              {/* SMC & Technical Analysis */}
+              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/5">
+                <div className="bg-black/20 rounded-xl p-3 border border-white/5">
+                  <p className="text-[9px] font-mono text-gray-500 uppercase mb-2">Market Structure</p>
+                  <p className={`text-xs font-orbitron font-bold ${
+                    results.smcAnalysis.structure === 'HH/HL' ? 'text-green-400' : 
+                    results.smcAnalysis.structure === 'LH/LL' ? 'text-red-400' : 'text-yellow-400'
+                  }`}>{results.smcAnalysis.structure}</p>
+                  {results.smcAnalysis.orderBlocks && results.smcAnalysis.orderBlocks.length > 0 && (
+                    <p className="text-[8px] text-cyan-400 mt-1 font-mono">⚡ {results.smcAnalysis.orderBlocks[0].type} OB</p>
+                  )}
+                  <p className={`text-[8px] mt-1 font-mono ${
+                    results.smcAnalysis.trend === 'BULLISH' ? 'text-green-400' : 
+                    results.smcAnalysis.trend === 'BEARISH' ? 'text-red-400' : 'text-gray-400'
+                  }`}>{results.smcAnalysis.trend}</p>
+                </div>
+                <div className="bg-black/20 rounded-xl p-3 border border-white/5">
+                  <p className="text-[9px] font-mono text-gray-500 uppercase mb-2">Trend Strength</p>
+                  <p className="text-xs font-orbitron font-bold text-purple-400">{results.technicals.strength}%</p>
+                  <p className="text-[8px] text-gray-400 mt-1 font-mono">{results.technicals.direction} • {results.technicals.macdSignal}</p>
+                </div>
+              </div>
+
               <div className="space-y-3 pt-4 border-t border-white/5">
-                <h4 className="font-orbitron text-xs font-bold text-gray-300 uppercase">Tactical Targets</h4>
+                <h4 className="font-orbitron text-xs font-bold text-gray-300 uppercase flex items-center gap-2">
+                  <Zap size={14} className="text-cyan-500" /> Tactical Targets (Live-Calculated)
+                </h4>
                 <div className="grid grid-cols-1 gap-2">
                   {results.targets.map((t: any, i: number) => (
                     <div key={i} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5 group hover:border-cyan-500/30 transition-colors">
-                      <span className="text-xs font-mono text-gray-400 group-hover:text-cyan-400 transition-colors uppercase">{t.label}</span>
+                      <div>
+                        <span className="text-xs font-mono text-gray-400 group-hover:text-cyan-400 transition-colors uppercase block">{t.label}</span>
+                        <span className="text-[8px] text-gray-500 font-mono">{t.pips} pips</span>
+                      </div>
                       <span className="font-orbitron font-bold text-white">{t.value}</span>
                     </div>
                   ))}

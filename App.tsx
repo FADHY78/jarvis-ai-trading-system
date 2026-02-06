@@ -224,7 +224,7 @@ const App: React.FC = () => {
                 <Route path="/scanner" element={<MarketScanner prices={prices} />} />
                 <Route path="/signals" element={<AISignals prices={prices} />} />
                 <Route path="/analysis" element={<AIAnalysis prices={prices} />} />
-                <Route path="/lens" element={<MarketLens />} />
+                <Route path="/lens" element={<MarketLens prices={prices} />} />
                 <Route path="/portfolio" element={<Portfolio positions={positions} />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/profile" element={<Profile activeAccount={activeAccount} accounts={derivAccounts} onAccountSwitch={setActiveAccount} />} />
