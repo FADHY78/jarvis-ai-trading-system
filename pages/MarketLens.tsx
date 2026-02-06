@@ -712,8 +712,8 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
         {/* Left Column: Upload and Preview */}
         <div className="space-y-4">
-          <div className={`glass rounded-3xl overflow-hidden border-2 transition-all duration-500 ${selectedImage ? 'border-cyan-500/50' : 'border-dashed border-white/10'}`}>
-            <div className="aspect-video relative bg-black/40 flex items-center justify-center overflow-hidden">
+          <div className={`${isCameraMode ? 'fixed inset-0 z-50 bg-black' : 'glass rounded-3xl overflow-hidden border-2 transition-all duration-500'} ${selectedImage && !isCameraMode ? 'border-cyan-500/50' : 'border-dashed border-white/10'}`}>
+            <div className="aspect-video relative bg-black flex items-center justify-center overflow-hidden rounded-3xl">
               {isCameraMode ? (
                 <>
                   <video 
@@ -721,33 +721,17 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
                     autoPlay 
                     playsInline
                     muted
-                    className="w-full h-full object-cover"
-                    style={{ transform: 'scaleX(-1)' }} // Mirror effect for better UX
+                    className="w-full h-full object-cover rounded-3xl"
                   />
                   <canvas ref={canvasRef} className="hidden" />
                   
-                  {/* Camera UI Overlay */}
+                  {/* Minimal Camera UI */}
                   <div className="absolute inset-0 pointer-events-none">
-                    {/* Viewfinder guide */}
-                    <div className="absolute inset-6 border-2 border-dashed border-cyan-400/60 rounded-xl animate-pulse"></div>
-                    <div className="absolute inset-12 border border-cyan-400/30 rounded-lg"></div>
-                    
-                    {/* Live indicator */}
-                    <div className="absolute top-4 left-4 bg-red-500 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
-                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                      <span className="text-[9px] font-mono text-white font-bold tracking-wider">LIVE</span>
+                    {/* Live indicator only */}
+                    <div className="absolute top-4 right-4 bg-red-500 px-2 py-1 rounded-full flex items-center gap-1 shadow-lg">
+                      <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                      <span className="text-[8px] font-mono text-white font-bold">REC</span>
                     </div>
-                    
-                    {/* Instructions */}
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 px-4 py-2 rounded-xl border border-cyan-500/40 backdrop-blur">
-                      <p className="text-[10px] font-mono text-cyan-400 text-center font-bold">📊 Frame your chart within guides</p>
-                    </div>
-                    
-                    {/* Focus indicators */}
-                    <div className="absolute top-1/4 left-1/4 w-6 h-6 border-l-2 border-t-2 border-cyan-400 rounded-tl-lg"></div>
-                    <div className="absolute top-1/4 right-1/4 w-6 h-6 border-r-2 border-t-2 border-cyan-400 rounded-tr-lg"></div>
-                    <div className="absolute bottom-1/4 left-1/4 w-6 h-6 border-l-2 border-b-2 border-cyan-400 rounded-bl-lg"></div>
-                    <div className="absolute bottom-1/4 right-1/4 w-6 h-6 border-r-2 border-b-2 border-cyan-400 rounded-br-lg"></div>
                   </div>
                 </>
               ) : selectedImage ? (
@@ -822,15 +806,15 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices }) => {
                 <>
                   <button 
                     onClick={captureFromCamera} 
-                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 border border-cyan-400 text-white rounded-xl transition-all font-orbitron text-[11px] uppercase font-bold tracking-widest shadow-lg neon-glow"
+                    className="flex-1 flex items-center justify-center gap-3 py-4 bg-white text-black hover:bg-gray-100 border-2 border-white rounded-2xl transition-all font-orbitron text-sm font-black uppercase tracking-wide shadow-2xl"
                   >
-                    <Camera size={16} /> Capture Chart
+                    <Camera size={20} /> Capture
                   </button>
                   <button 
                     onClick={stopCamera} 
-                    className="flex items-center justify-center gap-2 px-5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-xl transition-all font-orbitron text-[10px] uppercase font-bold"
+                    className="flex items-center justify-center gap-2 px-6 bg-black/60 hover:bg-black/80 border border-white/20 text-white rounded-2xl transition-all font-orbitron text-xs uppercase font-bold backdrop-blur"
                   >
-                    <CameraOff size={14} /> Stop
+                    ✕ Close
                   </button>
                 </>
               ) : (
