@@ -1,5 +1,8 @@
 
-const N8N_WEBHOOK_URL = 'https://primary-production-93b84.up.railway.app/webhook-test/jarvis';
+// Route through the Vercel/Express backend proxy to avoid CORS issues.
+// In development the dev server proxies /api → localhost:3001,
+// in production Vercel routes /api → server.js automatically.
+const N8N_WEBHOOK_URL = '/api/webhook/jarvis';
 
 export interface WebhookResponse {
   response?: string;

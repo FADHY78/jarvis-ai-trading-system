@@ -1148,6 +1148,31 @@ function startPolling() {
   pollTelegramUpdates();
 }
 
+// ── n8n Webhook proxy (avoids CORS when called from Vercel frontend) ─────────
+app.post('/api/webhook/jarvis', async (req, res) => {
+  const N8N_URL = 'https://primary-production-93b84.up.railway.app/webhook-test/jarvis';
+  try {
+    const upstream = await fetch(N8N_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(15000),
+    });
+    const contentType = upstream.headers.get('content-type') || '';
+    res.status(upstream.status);
+    if (contentType.includes('application/json')) {
+      const data = await upstream.json();
+      res.json(data);
+    } else {
+      const text = await upstream.text();
+      res.send(text);
+    }
+  } catch (err) {
+    console.error('n8n proxy error:', err.message);
+    res.status(502).json({ error: 'Webhook upstream unavailable', detail: err.message });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log('🚀 Server Status:');

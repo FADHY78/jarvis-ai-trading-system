@@ -128,13 +128,20 @@ export async function speakJarvis(text: string, style: 'sophisticated' | 'alert'
       });
     }
   } catch (error) {
-    const isOffline = !navigator.onLine || (error instanceof Error && (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('internet')));
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const isOffline = !navigator.onLine || errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('internet');
+    const isRateLimited = errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota') || errMsg.includes('rate');
     if (isOffline) {
       console.warn('JARVIS: Offline — falling back to browser TTS');
       return speakJarvisFallback(text);
     }
+    if (isRateLimited) {
+      console.warn('JARVIS: Gemini TTS quota exceeded — falling back to browser TTS');
+      return speakJarvisFallback(text);
+    }
     console.error("Vocal synthesis subsystem failure:", error);
-    return false;
+    // Fall back to browser TTS for any unhandled Gemini error
+    return speakJarvisFallback(text);
   }
   return false;
 }
