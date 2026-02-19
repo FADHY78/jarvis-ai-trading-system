@@ -183,10 +183,13 @@ function generateTradingInsights(data: any): Array<{ type: string; message: stri
 // Real Gemini AI Vision Analysis
 async function analyzeImageWithGemini(imageBase64: string, availablePrices: Record<string, PriceData>): Promise<GeminiImageAnalysis> {
   console.log('🤖 STARTING GEMINI AI ANALYSIS...');
+  console.log('📍 Environment check - NEXT_PUBLIC_GEMINI_API_KEY:', GEMINI_API_KEY ? `✅ Found (${GEMINI_API_KEY.substring(0, 10)}...)` : '❌ NOT FOUND');
   
   try {
     if (!GEMINI_API_KEY || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
       console.error('❌ No Gemini API key found');
+      console.error('   Expected: process.env.NEXT_PUBLIC_GEMINI_API_KEY');
+      console.error('   Got:', GEMINI_API_KEY);
       throw new Error('Gemini API key not configured. Add NEXT_PUBLIC_GEMINI_API_KEY to .env.local file.');
     }
 
@@ -710,6 +713,8 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
     await new Promise(r => setTimeout(r, 800));
 
     // REAL GEMINI AI IMAGE ANALYSIS
+    let detection: ImageDetection | null = null;
+    
     try {
       setAnalysisStep('PHASE 1b: Gemini AI processing visual content...');
       const geminiAnalysis = await analyzeImageWithGemini(imageSrc, prices);
@@ -725,7 +730,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
       setAnalysisStep(`GEMINI DETECTED: ${analysis.symbol} at ${analysis.priceFromImage.toFixed(2)} on ${analysis.timeframe}`);
       await new Promise(r => setTimeout(r, 600));
 
-      const detection: ImageDetection = {
+      detection = {
         symbol: analysis.symbol,
         symbolFull: analysis.symbolFull,
         priceFromImage: analysis.priceFromImage,
@@ -764,7 +769,7 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
       const liveAsset = resolvePriceData(forcedSymbol, prices);
       const fallbackPrice = liveAsset ? liveAsset.price : (meta.priceRange[0] + meta.priceRange[1]) / 2;
       
-      const detection: ImageDetection = {
+      detection = {
         symbol: forcedSymbol,
         symbolFull: meta.full,
         priceFromImage: fallbackPrice * (0.98 + Math.random() * 0.04), // Add small variation
@@ -782,9 +787,14 @@ const MarketLens: React.FC<MarketLensProps> = ({ prices = {} }) => {
       setAnalysisProgress(25);
     }
 
-    const detection = imageDetection!; // We know it's set by now
+    // Ensure detection is set
+    if (!detection) {
+      console.error('❌ Critical: Detection object failed to initialize');
+      speakJarvis("Analysis failed to initialize. Please try again.", 'sophisticated');
+      setIsAnalyzing(false);
+      return;
+    }
 
-    setImageDetection(detection);
     setAnalysisProgress(15);
     setAnalysisStep(`CONFIRMED: ${detection.symbol} at ${detection.priceFromImage.toFixed(2)} on ${detection.timeframe}`);
     await new Promise(r => setTimeout(r, 600));

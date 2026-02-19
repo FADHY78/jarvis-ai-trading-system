@@ -7,7 +7,7 @@ import { speakJarvis } from '../services/voiceService';
 const JarvisChat: React.FC = () => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', sender: 'JARVIS', text: 'Good afternoon, sir. How may I assist you with your trading today?', timestamp: new Date() }
+    { id: '1', sender: 'JARVIS', text: 'Good afternoon, sir. How may I assist you today? I am here to help with your business, church operations, or any queries you may have.', timestamp: new Date() }
   ]);
   const [isThinking, setIsThinking] = useState(false);
   const [vocalEnabled, setVocalEnabled] = useState(true);

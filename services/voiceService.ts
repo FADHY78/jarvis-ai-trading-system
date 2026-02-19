@@ -1,6 +1,29 @@
 
 import { GoogleGenAI, Modality } from "@google/genai";
 
+// Module-level references so audio can be interrupted at any time
+let activeAudioContext: AudioContext | null = null;
+let activeBufferSource: AudioBufferSourceNode | null = null;
+
+/**
+ * Immediately stop any audio currently playing from JARVIS.
+ */
+export function stopJarvis() {
+  // Stop Web Audio API source
+  if (activeBufferSource) {
+    try { activeBufferSource.onended = null; activeBufferSource.stop(); } catch (_) {}
+    activeBufferSource = null;
+  }
+  if (activeAudioContext) {
+    try { activeAudioContext.close(); } catch (_) {}
+    activeAudioContext = null;
+  }
+  // Stop browser speech synthesis fallback
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
 /**
  * Decodes a base64 string into a Uint8Array.
  * Optimized for processing raw PCM chunks from Gemini TTS.
@@ -41,10 +64,16 @@ async function decodeAudioData(
 /**
  * Primary function to trigger JARVIS's vocal response system.
  * Uses Gemini 2.5 Flash Preview TTS for high-fidelity, expressive audio.
+ * Falls back to browser TTS when offline.
  */
 export async function speakJarvis(text: string, style: 'sophisticated' | 'alert' | 'encouraging' = 'sophisticated') {
+  // Offline fallback: use browser's built-in speech synthesis
+  if (!navigator.onLine) {
+    return speakJarvisFallback(text);
+  }
+
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     
     // JARVIS Persona instruction to ensure character consistency and emotional nuance
     const emotionalPrompt = `
@@ -70,8 +99,12 @@ export async function speakJarvis(text: string, style: 'sophisticated' | 'alert'
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (base64Audio) {
+      // Stop any previous audio before playing new one
+      stopJarvis();
+
       const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      
+      activeAudioContext = outputAudioContext;
+
       const audioBuffer = await decodeAudioData(
         decode(base64Audio),
         outputAudioContext,
@@ -80,15 +113,53 @@ export async function speakJarvis(text: string, style: 'sophisticated' | 'alert'
       );
 
       const source = outputAudioContext.createBufferSource();
+      activeBufferSource = source;
       source.buffer = audioBuffer;
       source.connect(outputAudioContext.destination);
-      source.start();
-      
-      return true;
+
+      // Resolves when playback finishes OR is stopped externally
+      return new Promise<boolean>((resolve) => {
+        source.onended = () => {
+          activeBufferSource = null;
+          activeAudioContext = null;
+          resolve(true);
+        };
+        source.start();
+      });
     }
   } catch (error) {
+    const isOffline = !navigator.onLine || (error instanceof Error && (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('internet')));
+    if (isOffline) {
+      console.warn('JARVIS: Offline — falling back to browser TTS');
+      return speakJarvisFallback(text);
+    }
     console.error("Vocal synthesis subsystem failure:", error);
     return false;
   }
   return false;
+}
+
+/**
+ * Browser built-in speech synthesis fallback (works offline).
+ */
+function speakJarvisFallback(text: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!('speechSynthesis' in window)) {
+      resolve(false);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.92;
+    utterance.pitch = 1.05;
+    utterance.volume = 1;
+    // Prefer a female English voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
+      || voices.find(v => v.lang.startsWith('en'));
+    if (preferred) utterance.voice = preferred;
+    utterance.onend = () => resolve(true);
+    utterance.onerror = () => resolve(false);
+    window.speechSynthesis.speak(utterance);
+  });
 }
