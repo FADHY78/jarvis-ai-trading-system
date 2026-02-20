@@ -1,6 +1,4 @@
 
-import { GoogleGenAI, Modality } from "@google/genai";
-
 // Module-level references so audio can be interrupted at any time
 let activeAudioContext: AudioContext | null = null;
 let activeBufferSource: AudioBufferSourceNode | null = null;
@@ -9,7 +7,6 @@ let activeBufferSource: AudioBufferSourceNode | null = null;
  * Immediately stop any audio currently playing from JARVIS.
  */
 export function stopJarvis() {
-  // Stop Web Audio API source
   if (activeBufferSource) {
     try { activeBufferSource.onended = null; activeBufferSource.stop(); } catch (_) {}
     activeBufferSource = null;
@@ -18,7 +15,6 @@ export function stopJarvis() {
     try { activeAudioContext.close(); } catch (_) {}
     activeAudioContext = null;
   }
-  // Stop browser speech synthesis fallback
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
@@ -26,23 +22,20 @@ export function stopJarvis() {
 
 /**
  * Decodes a base64 string into a Uint8Array.
- * Optimized for processing raw PCM chunks from Gemini TTS.
  */
-function decode(base64: string) {
+function decode(base64: string): Uint8Array {
   const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes;
 }
 
 /**
- * Decodes raw PCM data into an AudioBuffer for the Web Audio API.
- * Converts 16-bit signed integers to 32-bit floats.
+ * Decodes raw 16-bit PCM data into an AudioBuffer.
  */
-async function decodeAudioData(
+async function decodePCM(
   data: Uint8Array,
   ctx: AudioContext,
   sampleRate: number,
@@ -51,121 +44,94 @@ async function decodeAudioData(
   const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
+  for (let ch = 0; ch < numChannels; ch++) {
+    const channelData = buffer.getChannelData(ch);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      channelData[i] = dataInt16[i * numChannels + ch] / 32768.0;
     }
   }
   return buffer;
 }
 
 /**
- * Primary function to trigger JARVIS's vocal response system.
- * Uses Gemini 2.5 Flash Preview TTS for high-fidelity, expressive audio.
- * Falls back to browser TTS when offline.
+ * Plays raw base64 PCM audio returned by the /api/tts proxy.
  */
-export async function speakJarvis(text: string, style: 'sophisticated' | 'alert' | 'encouraging' = 'sophisticated') {
-  // Offline fallback: use browser's built-in speech synthesis
+async function playBase64Audio(base64: string): Promise<boolean> {
+  stopJarvis();
+  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+  activeAudioContext = ctx;
+  const audioBuffer = await decodePCM(decode(base64), ctx, 24000, 1);
+  const source = ctx.createBufferSource();
+  activeBufferSource = source;
+  source.buffer = audioBuffer;
+  source.connect(ctx.destination);
+  return new Promise<boolean>((resolve) => {
+    source.onended = () => {
+      activeBufferSource = null;
+      activeAudioContext = null;
+      resolve(true);
+    };
+    source.start();
+  });
+}
+
+/**
+ * Primary JARVIS vocal function.
+ * Calls the /api/tts server proxy so the Gemini API key is NEVER exposed to the browser.
+ * Voice: Aoede — calm, confident, convincing female.
+ * Only falls back to browser TTS when the device is fully offline.
+ */
+export async function speakJarvis(
+  text: string,
+  style: 'sophisticated' | 'alert' | 'encouraging' = 'sophisticated',
+): Promise<boolean> {
+  // Hard offline: browser TTS only
   if (!navigator.onLine) {
     return speakJarvisFallback(text);
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    
-    // JARVIS Persona instruction to ensure character consistency and emotional nuance
-    const emotionalPrompt = `
-      System Protocol: Act as JARVIS. 
-      Vocal Identity: Sophisticated, highly intelligent, slightly warm female AI.
-      Style: ${style}.
-      Instruction: Deliver the following update with appropriate emotional inflection. 
-      Text: "${text}"
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: emotionalPrompt }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
-          },
-        },
-      },
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, style }),
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) {
-      // Stop any previous audio before playing new one
-      stopJarvis();
-
-      const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      activeAudioContext = outputAudioContext;
-
-      const audioBuffer = await decodeAudioData(
-        decode(base64Audio),
-        outputAudioContext,
-        24000,
-        1
-      );
-
-      const source = outputAudioContext.createBufferSource();
-      activeBufferSource = source;
-      source.buffer = audioBuffer;
-      source.connect(outputAudioContext.destination);
-
-      // Resolves when playback finishes OR is stopped externally
-      return new Promise<boolean>((resolve) => {
-        source.onended = () => {
-          activeBufferSource = null;
-          activeAudioContext = null;
-          resolve(true);
-        };
-        source.start();
-      });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as { error?: string };
+      console.error(`JARVIS TTS proxy error ${res.status}:`, err.error || '');
+      // Do NOT fall back — surface the error so the API key issue is visible
+      return false;
     }
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error);
-    const isOffline = !navigator.onLine || errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('internet');
-    const isRateLimited = errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota') || errMsg.includes('rate');
-    if (isOffline) {
-      console.warn('JARVIS: Offline — falling back to browser TTS');
-      return speakJarvisFallback(text);
+
+    const { audio } = await res.json() as { audio: string };
+    if (audio) {
+      return playBase64Audio(audio);
     }
-    if (isRateLimited) {
-      console.warn('JARVIS: Gemini TTS quota exceeded — falling back to browser TTS');
-      return speakJarvisFallback(text);
-    }
-    console.error("Vocal synthesis subsystem failure:", error);
-    // Fall back to browser TTS for any unhandled Gemini error
-    return speakJarvisFallback(text);
+    return false;
+  } catch (err) {
+    console.error('JARVIS TTS fetch failed:', err);
+    return false;
   }
-  return false;
 }
 
 /**
- * Browser built-in speech synthesis fallback (works offline).
+ * Browser built-in speech synthesis — offline fallback only.
  */
 function speakJarvisFallback(text: string): Promise<boolean> {
   return new Promise((resolve) => {
-    if (!('speechSynthesis' in window)) {
-      resolve(false);
-      return;
-    }
+    if (!('speechSynthesis' in window)) { resolve(false); return; }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.92;
+    utterance.rate = 0.90;
     utterance.pitch = 1.05;
     utterance.volume = 1;
-    // Prefer a female English voice if available
     const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
-      || voices.find(v => v.lang.startsWith('en'));
+    const preferred =
+      voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female')) ||
+      voices.find(v => v.lang.startsWith('en'));
     if (preferred) utterance.voice = preferred;
-    utterance.onend = () => resolve(true);
+    utterance.onend  = () => resolve(true);
     utterance.onerror = () => resolve(false);
     window.speechSynthesis.speak(utterance);
   });

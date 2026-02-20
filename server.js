@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
+import { GoogleGenAI, Modality } from '@google/genai';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -1148,16 +1149,66 @@ function startPolling() {
   pollTelegramUpdates();
 }
 
+// ── Gemini TTS proxy — key stays server-side, never exposed to browser ────────
+app.post('/api/tts', async (req, res) => {
+  const { text, style } = req.body || {};
+  if (!text) return res.status(400).json({ error: 'text is required' });
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+
+    const styleMap = {
+      sophisticated: 'calm, confident, and articulate',
+      alert:         'clear, urgent, and composed',
+      encouraging:   'warm, calm, and reassuring',
+    };
+    const styleDesc = styleMap[style] || styleMap.sophisticated;
+
+    const prompt = `You are JARVIS, a calm, confident, and convincing female AI assistant. ` +
+      `Speak in a ${styleDesc} tone — measured pace, composed authority, naturally persuasive. ` +
+      `Deliver this message: "${text}"`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-preview-tts',
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Aoede' } },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) return res.status(502).json({ error: 'No audio returned from Gemini' });
+
+    res.json({ audio: base64Audio });
+  } catch (err) {
+    const msg = err?.message || String(err);
+    const status = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') ? 429
+      : msg.includes('403') || msg.includes('PERMISSION_DENIED') ? 403
+      : 502;
+    console.error('TTS proxy error:', msg);
+    res.status(status).json({ error: msg });
+  }
+});
+
 // ── n8n Webhook proxy (avoids CORS when called from Vercel frontend) ─────────
 app.post('/api/webhook/jarvis', async (req, res) => {
   const N8N_URL = 'https://primary-production-93b84.up.railway.app/webhook-test/jarvis';
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     const upstream = await fetch(N8N_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
-      signal: AbortSignal.timeout(15000),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     const contentType = upstream.headers.get('content-type') || '';
     res.status(upstream.status);
     if (contentType.includes('application/json')) {
